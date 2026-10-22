@@ -69,6 +69,15 @@ info:
     description: User & Authentication Microservice for RentRide
     version: 0.0.1-SNAPSHOT
 
+# ── Security & JWT Configuration ───────────────────────────────────────────
+application:
+  security:
+    jwt:
+      secret-key: NGRmYmE1ZjQ4M2E4ZjI4ZjM2YTkzMjQ5OTM2NWNlMWQ3OGFmOWY4ZDgyZGMzNzRmOWI0OTFhZmQ=
+      expiration: 86400000            # 24 hours (86,400,000 ms)
+      refresh-token:
+        expiration: 604800000         # 7 days (604,800,000 ms)
+
 # ── Logging ──────────────────────────────────────────────────────────────
 logging:
   level:
@@ -76,3 +85,4 @@ logging:
     org.springframework.web: INFO
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
