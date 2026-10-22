@@ -1,0 +1,78 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: user-service
+
+  # ── DataSource (HikariCP) ─────────────────────────────────────────────────
+  datasource:
+    url: jdbc:postgresql://localhost:5432/rentride_user_db
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      # Pool sizing — suitable for a single-node dev environment
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000          # 5 min — idle connections returned to pool
+      connection-timeout: 20000     # 20 s  — max wait before "Unable to acquire connection"
+      max-lifetime: 1800000         # 30 min — recycle connections before DB kills them
+      pool-name: UserServiceHikariPool
+      # Fast-fail on startup if DB is unreachable
+      initialization-fail-timeout: 1
+
+  # ── JPA / Hibernate ──────────────────────────────────────────────────────
+  jpa:
+    hibernate:
+      # 'update' — safe for development: adds columns/tables without dropping data.
+      # Switch to 'validate' (+ Flyway/Liquibase) for production deployments.
+      ddl-auto: update
+    show-sql: true
+    open-in-view: false             # Disable OSIV — prevents lazy-load anti-patterns
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: UTC            # Persist timestamps in UTC consistently
+
+# ── Eureka Client ─────────────────────────────────────────────────────────
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    # Unique instance ID prevents duplicate registrations on restart
+    instance-id: ${spring.application.name}:${random.uuid}
+
+# ── Actuator ─────────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+  endpoint:
+    health:
+      show-details: always
+  info:
+    env:
+      enabled: true
+
+# ── Application Info (surfaced via /actuator/info) ─────────────────────────
+info:
+  app:
+    name: ${spring.application.name}
+    description: User & Authentication Microservice for RentRide
+    version: 0.0.1-SNAPSHOT
+
+# ── Logging ──────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.rentride.userservice: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
