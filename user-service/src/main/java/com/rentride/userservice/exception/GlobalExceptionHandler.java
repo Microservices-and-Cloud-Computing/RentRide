@@ -1,10 +1,13 @@
 package com.rentride.userservice.exception;
 
 import com.rentride.userservice.dto.ErrorResponse;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -16,7 +19,7 @@ import java.util.Map;
 
 /**
  * Centralized exception handling advice for REST controllers.
- * Intercepts business and validation exceptions to return standard error payloads.
+ * Intercepts business, authentication, validation, and JWT exceptions to return standard error payloads.
  */
 @RestControllerAdvice
 @Slf4j
@@ -47,6 +50,36 @@ public class GlobalExceptionHandler {
                 .build();
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * Handles authentication failures, bad credentials, and expired/invalid JWT tokens.
+     */
+    @ExceptionHandler({
+            BadCredentialsException.class,
+            AuthenticationFailedException.class,
+            AuthenticationException.class,
+            JwtException.class
+    })
+    public ResponseEntity<ErrorResponse> handleAuthenticationException(
+            Exception ex,
+            HttpServletRequest request) {
+
+        log.warn("Authentication failure on path '{}': {}", request.getRequestURI(), ex.getMessage());
+
+        String errorMessage = ex instanceof BadCredentialsException
+                ? "Invalid email or password"
+                : ex.getMessage();
+
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.UNAUTHORIZED.value())
+                .error(HttpStatus.UNAUTHORIZED.getReasonPhrase())
+                .message(errorMessage)
+                .path(request.getRequestURI())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response);
     }
 
     /**

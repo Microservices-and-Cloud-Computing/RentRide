@@ -1,8 +1,11 @@
 package com.rentride.userservice.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rentride.userservice.dto.AuthResponse;
 import com.rentride.userservice.dto.CustomerRegisterRequest;
+import com.rentride.userservice.dto.LoginRequest;
 import com.rentride.userservice.dto.ProviderRegisterRequest;
+import com.rentride.userservice.dto.RefreshTokenRequest;
 import com.rentride.userservice.entity.Role;
 import com.rentride.userservice.entity.User;
 import com.rentride.userservice.entity.UserStatus;
@@ -15,6 +18,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
@@ -209,5 +213,155 @@ class AuthControllerTest {
         // Verify the raw plain text password is NEVER stored
         assertThat(storedPassword).isNotEqualTo(rawPassword);
         assertThat(storedPassword).doesNotContain(rawPassword);
+    }
+
+    @Test
+    @DisplayName("testLogin_Success: Valid credentials return HTTP 200 with tokens and user profile")
+    void testLogin_Success() throws Exception {
+        String email = "login.customer@rentride.com";
+        String password = "Password123!";
+
+        CustomerRegisterRequest regRequest = CustomerRegisterRequest.builder()
+                .fullName("Login User")
+                .email(email)
+                .password(password)
+                .phoneNumber("+94771122334")
+                .driverLicenseNumber("B9988776")
+                .build();
+
+        mockMvc.perform(post("/api/v1/auth/register/customer")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(regRequest)))
+                .andExpect(status().isCreated());
+
+        LoginRequest loginRequest = LoginRequest.builder()
+                .email(email)
+                .password(password)
+                .build();
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken", notNullValue()))
+                .andExpect(jsonPath("$.refreshToken", notNullValue()))
+                .andExpect(jsonPath("$.tokenType", is("Bearer")))
+                .andExpect(jsonPath("$.expiresIn", is(86400000)))
+                .andExpect(jsonPath("$.user.email", is(email)))
+                .andExpect(jsonPath("$.user.role", is("ROLE_CUSTOMER")))
+                .andExpect(jsonPath("$.user.status", is("ACTIVE")))
+                .andExpect(jsonPath("$.user.password").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("testLogin_InvalidPassword_Returns401: Wrong password returns HTTP 401 Unauthorized")
+    void testLogin_InvalidPassword_Returns401() throws Exception {
+        String email = "wrongpw.customer@rentride.com";
+
+        CustomerRegisterRequest regRequest = CustomerRegisterRequest.builder()
+                .fullName("Wrong Pw User")
+                .email(email)
+                .password("Password123!")
+                .phoneNumber("+94771122335")
+                .driverLicenseNumber("B9988775")
+                .build();
+
+        mockMvc.perform(post("/api/v1/auth/register/customer")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(regRequest)))
+                .andExpect(status().isCreated());
+
+        LoginRequest loginRequest = LoginRequest.builder()
+                .email(email)
+                .password("WrongPassword999!")
+                .build();
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)))
+                .andExpect(jsonPath("$.error", is("Unauthorized")));
+    }
+
+    @Test
+    @DisplayName("testLogin_UserNotFound_Returns401: Unregistered email returns HTTP 401 Unauthorized")
+    void testLogin_UserNotFound_Returns401() throws Exception {
+        LoginRequest loginRequest = LoginRequest.builder()
+                .email("nonexistent@rentride.com")
+                .password("Password123!")
+                .build();
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)))
+                .andExpect(jsonPath("$.error", is("Unauthorized")));
+    }
+
+    @Test
+    @DisplayName("testRefreshToken_Success: Valid refresh token returns new access and refresh tokens")
+    void testRefreshToken_Success() throws Exception {
+        String email = "refresh.customer@rentride.com";
+        String password = "Password123!";
+
+        CustomerRegisterRequest regRequest = CustomerRegisterRequest.builder()
+                .fullName("Refresh User")
+                .email(email)
+                .password(password)
+                .phoneNumber("+94771122336")
+                .driverLicenseNumber("B9988774")
+                .build();
+
+        mockMvc.perform(post("/api/v1/auth/register/customer")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(regRequest)))
+                .andExpect(status().isCreated());
+
+        LoginRequest loginRequest = LoginRequest.builder()
+                .email(email)
+                .password(password)
+                .build();
+
+        MvcResult loginResult = mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginRequest)))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        AuthResponse authResponse = objectMapper.readValue(
+                loginResult.getResponse().getContentAsString(), AuthResponse.class);
+
+        assertThat(authResponse.getRefreshToken()).isNotBlank();
+
+        RefreshTokenRequest refreshRequest = RefreshTokenRequest.builder()
+                .refreshToken(authResponse.getRefreshToken())
+                .build();
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(refreshRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken", notNullValue()))
+                .andExpect(jsonPath("$.refreshToken", notNullValue()))
+                .andExpect(jsonPath("$.tokenType", is("Bearer")))
+                .andExpect(jsonPath("$.expiresIn", is(86400000)))
+                .andExpect(jsonPath("$.user.email", is(email)));
+    }
+
+    @Test
+    @DisplayName("testRefreshToken_InvalidToken_Returns401: Malformed or unparseable token returns HTTP 401")
+    void testRefreshToken_InvalidToken_Returns401() throws Exception {
+        RefreshTokenRequest refreshRequest = RefreshTokenRequest.builder()
+                .refreshToken("malformed.jwt.token.string")
+                .build();
+
+        mockMvc.perform(post("/api/v1/auth/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(refreshRequest)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status", is(401)))
+                .andExpect(jsonPath("$.error", is("Unauthorized")));
     }
 }

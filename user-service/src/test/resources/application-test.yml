@@ -22,3 +22,11 @@ eureka:
     enabled: false
     register-with-eureka: false
     fetch-registry: false
+
+application:
+  security:
+    jwt:
+      secret-key: NGRmYmE1ZjQ4M2E4ZjI4ZjM2YTkzMjQ5OTM2NWNlMWQ3OGFmOWY4ZDgyZGMzNzRmOWI0OTFhZmQ=
+      expiration: 86400000
+      refresh-token:
+        expiration: 604800000

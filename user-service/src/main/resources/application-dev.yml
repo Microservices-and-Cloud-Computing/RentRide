@@ -22,6 +22,15 @@ spring:
       hibernate:
         format_sql: true
 
+# ── Security & JWT Configuration ───────────────────────────────────────────
+application:
+  security:
+    jwt:
+      secret-key: NGRmYmE1ZjQ4M2E4ZjI4ZjM2YTkzMjQ5OTM2NWNlMWQ3OGFmOWY4ZDgyZGMzNzRmOWI0OTFhZmQ=
+      expiration: 86400000            # 24 hours
+      refresh-token:
+        expiration: 604800000         # 7 days
+
 # ── Disable Eureka client during standalone local development ──────────────
 eureka:
   client:
