@@ -26,11 +26,12 @@ public class AuthController {
 
     /**
      * Registers a new customer account on the platform.
+     * Supports both /api/v1/auth/register and /api/v1/auth/register/customer.
      *
      * @param request validated customer registration payload
      * @return {@code 201 Created} with registered customer details
      */
-    @PostMapping("/register/customer")
+    @PostMapping({"/register", "/register/customer"})
     public ResponseEntity<UserResponse> registerCustomer(
             @Valid @RequestBody CustomerRegisterRequest request) {
         log.info("Received customer registration request for email: {}", request.getEmail());

@@ -76,6 +76,28 @@ class AuthControllerTest {
     }
 
     @Test
+    @DisplayName("testRegisterCustomer_ViaRegisterAlias_Success: HTTP 201 via /api/v1/auth/register")
+    void testRegisterCustomer_ViaRegisterAlias_Success() throws Exception {
+        CustomerRegisterRequest request = CustomerRegisterRequest.builder()
+                .fullName("Kasun Alias Test")
+                .email("alias.customer@rentride.com")
+                .password("Password123!")
+                .phoneNumber("+94771234568")
+                .driverLicenseNumber("B1234568")
+                .build();
+
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id", notNullValue()))
+                .andExpect(jsonPath("$.fullName", is("Kasun Alias Test")))
+                .andExpect(jsonPath("$.email", is("alias.customer@rentride.com")))
+                .andExpect(jsonPath("$.role", is("ROLE_CUSTOMER")))
+                .andExpect(jsonPath("$.status", is("ACTIVE")));
+    }
+
+    @Test
     @DisplayName("testRegisterProvider_Success: HTTP 201, ROLE_PROVIDER, business info populated")
     void testRegisterProvider_Success() throws Exception {
         ProviderRegisterRequest request = ProviderRegisterRequest.builder()
