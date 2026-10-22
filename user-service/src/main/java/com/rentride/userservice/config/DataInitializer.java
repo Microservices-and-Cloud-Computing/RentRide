@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Component;
 public class DataInitializer implements CommandLineRunner {
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public void run(String... args) {
@@ -43,12 +45,10 @@ public class DataInitializer implements CommandLineRunner {
 
         log.info("No administrator found. Seeding baseline administrator: {}", adminEmail);
 
-        // Pre-computed BCrypt hash for default initial password 'Admin@123'
-        // $2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy
         User admin = User.builder()
                 .fullName("RentRide Administrator")
                 .email(adminEmail)
-                .password("$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy")
+                .password(passwordEncoder.encode("Admin@123"))
                 .phoneNumber("+1000000000")
                 .role(Role.ROLE_ADMIN)
                 .status(UserStatus.ACTIVE)

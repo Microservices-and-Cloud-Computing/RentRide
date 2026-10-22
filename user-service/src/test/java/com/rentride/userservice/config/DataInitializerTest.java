@@ -10,12 +10,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -29,6 +31,9 @@ class DataInitializerTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private PasswordEncoder passwordEncoder;
+
     @InjectMocks
     private DataInitializer dataInitializer;
 
@@ -37,6 +42,7 @@ class DataInitializerTest {
     void shouldSeedAdminWhenNoneExists() {
         when(userRepository.existsByEmail("admin@rentride.com")).thenReturn(false);
         when(userRepository.findByRole(Role.ROLE_ADMIN)).thenReturn(Collections.emptyList());
+        when(passwordEncoder.encode("Admin@123")).thenReturn("$2a$10$encodedPasswordHash");
 
         dataInitializer.run();
 
@@ -46,7 +52,7 @@ class DataInitializerTest {
         User seededAdmin = captor.getValue();
         assertThat(seededAdmin.getEmail()).isEqualTo("admin@rentride.com");
         assertThat(seededAdmin.getRole()).isEqualTo(Role.ROLE_ADMIN);
-        assertThat(seededAdmin.getPassword()).isNotBlank();
+        assertThat(seededAdmin.getPassword()).isEqualTo("$2a$10$encodedPasswordHash");
         assertThat(seededAdmin.getFullName()).isEqualTo("RentRide Administrator");
     }
 
