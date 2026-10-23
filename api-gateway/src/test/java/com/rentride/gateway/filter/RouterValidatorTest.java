@@ -30,6 +30,7 @@ class RouterValidatorTest {
     @DisplayName("isSecured: Actuator, Swagger, and Eureka endpoints should bypass authentication")
     void testPublicDocumentationAndHealthEndpoints_AreNotSecured() {
         assertThat(routerValidator.isSecured(MockServerHttpRequest.get("/actuator/health").build())).isFalse();
+        assertThat(routerValidator.isSecured(MockServerHttpRequest.get("/api/v1/vehicles/status").build())).isFalse();
         assertThat(routerValidator.isSecured(MockServerHttpRequest.get("/v3/api-docs").build())).isFalse();
         assertThat(routerValidator.isSecured(MockServerHttpRequest.get("/swagger-ui/index.html").build())).isFalse();
         assertThat(routerValidator.isSecured(MockServerHttpRequest.get("/swagger-ui.html").build())).isFalse();
