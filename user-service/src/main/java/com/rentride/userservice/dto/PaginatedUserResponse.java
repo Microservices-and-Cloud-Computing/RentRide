@@ -1,5 +1,6 @@
 package com.rentride.userservice.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,13 +16,25 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Schema(description = "Paginated list of user records")
 public class PaginatedUserResponse {
 
+    @Schema(description = "List of user profile records for current page")
     private List<UserResponse> content;
+
+    @Schema(description = "Zero-based current page number", example = "0")
     private int pageNo;
+
+    @Schema(description = "Requested page size limit", example = "10")
     private int pageSize;
+
+    @Schema(description = "Total number of user records matching criteria", example = "25")
     private long totalElements;
+
+    @Schema(description = "Total number of pages available", example = "3")
     private int totalPages;
+
+    @Schema(description = "Flag indicating if this is the final page", example = "false")
     private boolean last;
 
     /**
