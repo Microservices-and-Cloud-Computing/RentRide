@@ -1,0 +1,246 @@
+{
+	"info": {
+		"_postman_id": "9b1a7d2c-4e8f-4a3b-9c12-3f6e8d5a2b10",
+		"name": "RentRide - Vehicle Service (Commit 13)",
+		"description": "Postman test suite for verifying Vehicle Microservice scaffolding, JPA/database connectivity, Eureka discovery, and API Gateway edge routing.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Direct Vehicle Service Status (Port 8082)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Verify vehicle-service payload structure\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql(\"UP\");",
+							"    pm.expect(jsonData.service).to.eql(\"vehicle-service\");",
+							"    pm.expect(jsonData.port).to.eql(8082);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8082/api/v1/vehicles/status",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8082",
+					"path": [
+						"api",
+						"v1",
+						"vehicles",
+						"status"
+					]
+				},
+				"description": "Tests direct liveness and identity of vehicle-service on its native port 8082."
+			},
+			"response": []
+		},
+		{
+			"name": "2. Gateway Routed Vehicle Status (Port 8080)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Gateway forwards request with 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Gateway successfully load-balanced to vehicle-service\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql(\"UP\");",
+							"    pm.expect(jsonData.service).to.eql(\"vehicle-service\");",
+							"    pm.expect(jsonData.port).to.eql(8082);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8080/api/v1/vehicles/status",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8080",
+					"path": [
+						"api",
+						"v1",
+						"vehicles",
+						"status"
+					]
+				},
+				"description": "Verifies edge routing via Spring Cloud Gateway (port 8080) to vehicle-service via Eureka Service Discovery (lb://VEHICLE-SERVICE)."
+			},
+			"response": []
+		},
+		{
+			"name": "3. Actuator Health & DB Liveness (Port 8082)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Overall health is UP and DB is connected\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql(\"UP\");",
+							"    if (jsonData.components && jsonData.components.db) {",
+							"        pm.expect(jsonData.components.db.status).to.eql(\"UP\");",
+							"    }",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8082/actuator/health",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8082",
+					"path": [
+						"actuator",
+						"health"
+					]
+				},
+				"description": "Verifies Actuator health details, including database (PostgreSQL/HikariCP) connectivity."
+			},
+			"response": []
+		},
+		{
+			"name": "4. Actuator Info Endpoint (Port 8082)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Application metadata exists\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.app).to.be.an(\"object\");",
+							"    pm.expect(jsonData.app.name).to.eql(\"vehicle-service\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8082/actuator/info",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8082",
+					"path": [
+						"actuator",
+						"info"
+					]
+				},
+				"description": "Verifies exposed application info metadata from application.yml."
+			},
+			"response": []
+		},
+		{
+			"name": "5. Eureka Registry Instance Query (Port 8761)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"VEHICLE-SERVICE is registered in Eureka as UP\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.application.name).to.eql(\"VEHICLE-SERVICE\");",
+							"    var instance = jsonData.application.instance[0];",
+							"    pm.expect(instance.status).to.eql(\"UP\");",
+							"    pm.expect(instance.port[\"$\"]).to.eql(8082);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8761/eureka/apps/VEHICLE-SERVICE",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8761",
+					"path": [
+						"eureka",
+						"apps",
+						"VEHICLE-SERVICE"
+					]
+				},
+				"description": "Queries Eureka REST API to ensure VEHICLE-SERVICE is registered and reporting status UP on port 8082."
+			},
+			"response": []
+		}
+	]
+}

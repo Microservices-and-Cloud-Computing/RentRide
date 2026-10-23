@@ -96,11 +96,11 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- H2 in-memory database for fast zero-dependency test execution -->
+        <!-- H2 in-memory database for fast zero-dependency test execution and local development -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>test</scope>
+            <scope>runtime</scope>
         </dependency>
 
     </dependencies>
