@@ -30,6 +30,10 @@ build/
 # VS Code
 .vscode/
 
+# Environment and logs
+.env
+*.log
+
 # OS metadata
 .DS_Store
 Thumbs.db
