@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
@@ -47,8 +48,8 @@ class AuthServiceImplTest {
     private AuthServiceImpl authService;
 
     @Test
-    @DisplayName("registerCustomer: Success should hash password, assign ROLE_CUSTOMER and ACTIVE status")
-    void testRegisterCustomer_Success() {
+    @DisplayName("registerCustomer_Success: hashes password, assigns ROLE_CUSTOMER and ACTIVE status, excludes password in response")
+    void registerCustomer_Success() {
         CustomerRegisterRequest request = CustomerRegisterRequest.builder()
                 .fullName("Alice Customer")
                 .email("alice@rentride.com")
@@ -75,13 +76,21 @@ class AuthServiceImplTest {
 
         UserResponse response = authService.registerCustomer(request);
 
+        // Assert DTO mapping
         assertThat(response).isNotNull();
         assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getFullName()).isEqualTo("Alice Customer");
         assertThat(response.getEmail()).isEqualTo("alice@rentride.com");
         assertThat(response.getRole()).isEqualTo(Role.ROLE_CUSTOMER);
         assertThat(response.getStatus()).isEqualTo(UserStatus.ACTIVE);
+        assertThat(response.getPhoneNumber()).isEqualTo("+1234567890");
         assertThat(response.getDriverLicenseNumber()).isEqualTo("DL-ALICE-123");
 
+        // Assert password exclusion in response DTO
+        assertThat(UserResponse.class.getDeclaredFields())
+                .noneMatch(field -> field.getName().equalsIgnoreCase("password"));
+
+        // Assert entity password hashing
         ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(captor.capture());
         User capturedUser = captor.getValue();
@@ -89,8 +98,8 @@ class AuthServiceImplTest {
     }
 
     @Test
-    @DisplayName("registerCustomer: Duplicate email should throw EmailAlreadyExistsException")
-    void testRegisterCustomer_DuplicateEmail_ThrowsException() {
+    @DisplayName("registerCustomer_DuplicateEmail_ThrowsConflict: Throws EmailAlreadyExistsException and never calls save")
+    void registerCustomer_DuplicateEmail_ThrowsConflict() {
         CustomerRegisterRequest request = CustomerRegisterRequest.builder()
                 .fullName("Alice Customer")
                 .email("duplicate@rentride.com")
@@ -106,8 +115,8 @@ class AuthServiceImplTest {
     }
 
     @Test
-    @DisplayName("registerProvider: Success should hash password, assign ROLE_PROVIDER and store business details")
-    void testRegisterProvider_Success() {
+    @DisplayName("registerProvider_Success: Verify business fields are preserved on Role.ROLE_PROVIDER")
+    void registerProvider_Success() {
         ProviderRegisterRequest request = ProviderRegisterRequest.builder()
                 .fullName("Bob Provider")
                 .email("bob@rentride.com")
@@ -145,12 +154,18 @@ class AuthServiceImplTest {
         assertThat(response.getBusinessName()).isEqualTo("Apex Rental Fleet");
         assertThat(response.getStatus()).isEqualTo(UserStatus.ACTIVE);
 
-        verify(userRepository).save(any(User.class));
+        ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(captor.capture());
+        User capturedUser = captor.getValue();
+        assertThat(capturedUser.getBusinessName()).isEqualTo("Apex Rental Fleet");
+        assertThat(capturedUser.getBusinessRegistrationNumber()).isEqualTo("BRN-998877");
+        assertThat(capturedUser.getTaxIdentificationNumber()).isEqualTo("TIN-112233");
+        assertThat(capturedUser.getRole()).isEqualTo(Role.ROLE_PROVIDER);
     }
 
     @Test
-    @DisplayName("login: Valid credentials should authenticate and issue access and refresh tokens")
-    void testLogin_Success() {
+    @DisplayName("login_Success: Authenticates credentials and returns access and refresh tokens")
+    void login_Success() {
         LoginRequest request = LoginRequest.builder()
                 .email("login@rentride.com")
                 .password("Password123!")
@@ -164,6 +179,8 @@ class AuthServiceImplTest {
                 .status(UserStatus.ACTIVE)
                 .build();
 
+        Authentication mockAuth = mock(Authentication.class);
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenReturn(mockAuth);
         when(userRepository.findByEmail("login@rentride.com")).thenReturn(Optional.of(user));
         when(jwtService.generateToken(user)).thenReturn("mock.access.token");
         when(jwtService.generateRefreshToken(user)).thenReturn("mock.refresh.token");
@@ -179,11 +196,13 @@ class AuthServiceImplTest {
         assertThat(response.getUser().getEmail()).isEqualTo("login@rentride.com");
 
         verify(authenticationManager).authenticate(any(UsernamePasswordAuthenticationToken.class));
+        verify(jwtService).generateToken(user);
+        verify(jwtService).generateRefreshToken(user);
     }
 
     @Test
-    @DisplayName("login: Invalid credentials should throw BadCredentialsException")
-    void testLogin_BadCredentials() {
+    @DisplayName("login_InvalidPassword_ThrowsBadCredentials: Bad credentials throws BadCredentialsException")
+    void login_InvalidPassword_ThrowsBadCredentials() {
         LoginRequest request = LoginRequest.builder()
                 .email("login@rentride.com")
                 .password("WrongPassword")
@@ -197,7 +216,7 @@ class AuthServiceImplTest {
 
     @Test
     @DisplayName("login: Suspended account should throw AuthenticationFailedException")
-    void testLogin_SuspendedAccount() {
+    void login_SuspendedAccount() {
         LoginRequest request = LoginRequest.builder()
                 .email("suspended@rentride.com")
                 .password("Password123!")
@@ -210,6 +229,8 @@ class AuthServiceImplTest {
                 .status(UserStatus.SUSPENDED)
                 .build();
 
+        Authentication mockAuth = mock(Authentication.class);
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenReturn(mockAuth);
         when(userRepository.findByEmail("suspended@rentride.com")).thenReturn(Optional.of(suspendedUser));
 
         assertThrows(AuthenticationFailedException.class, () -> authService.login(request));
@@ -217,7 +238,7 @@ class AuthServiceImplTest {
 
     @Test
     @DisplayName("refreshToken: Valid token should generate new access token")
-    void testRefreshToken_Success() {
+    void refreshToken_Success() {
         RefreshTokenRequest request = RefreshTokenRequest.builder()
                 .refreshToken("valid.refresh.token")
                 .build();
@@ -244,7 +265,7 @@ class AuthServiceImplTest {
 
     @Test
     @DisplayName("refreshToken: Invalid token should throw AuthenticationFailedException")
-    void testRefreshToken_Invalid() {
+    void refreshToken_Invalid() {
         RefreshTokenRequest request = RefreshTokenRequest.builder()
                 .refreshToken("invalid.refresh.token")
                 .build();
