@@ -1,132 +1,134 @@
 package com.rentride.userservice.service;
 
+import com.rentride.userservice.dto.UpdateProfileRequest;
+import com.rentride.userservice.dto.UserResponse;
 import com.rentride.userservice.entity.Role;
 import com.rentride.userservice.entity.User;
 import com.rentride.userservice.entity.UserStatus;
-import com.rentride.userservice.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
 
 import java.util.List;
 import java.util.Optional;
 
 /**
- * Business-logic layer for user management in the RentRide platform.
- *
- * <p>Coordinates between REST controllers, security handlers, and persistence layer.
+ * Service contract defining user profile management, administrative queries,
+ * role-based access control workflows, and persistence queries.
  */
-@Service
-@RequiredArgsConstructor
-@Slf4j
-@Transactional(readOnly = true)
-public class UserService {
+public interface UserService {
 
-    private final UserRepository userRepository;
+    /**
+     * Retrieves the profile of the currently authenticated user by their email address.
+     *
+     * @param email authenticated user's email
+     * @return {@link UserResponse} profile details
+     */
+    UserResponse getCurrentUserProfile(String email);
+
+    /**
+     * Updates the authenticated user's editable profile fields according to role constraints.
+     *
+     * @param email   authenticated user's email
+     * @param request profile fields to update
+     * @return updated {@link UserResponse}
+     */
+    UserResponse updateCurrentUserProfile(String email, UpdateProfileRequest request);
+
+    /**
+     * Looks up user profile details by database ID.
+     * Accessible by the user themselves or administrators.
+     *
+     * @param userId target user ID
+     * @return {@link UserResponse}
+     */
+    UserResponse getUserById(Long userId);
+
+    /**
+     * Admin-only query returning a paginated list of users with optional filtering.
+     *
+     * @param page   zero-based page index
+     * @param size   number of records per page
+     * @param role   optional role filter (null for all)
+     * @param status optional status filter (null for all)
+     * @return {@link Page} of {@link UserResponse}
+     */
+    Page<UserResponse> getAllUsers(int page, int size, Role role, UserStatus status);
+
+    /**
+     * Admin-only operation to activate, suspend, or update a user's account status.
+     *
+     * @param userId    target user ID
+     * @param newStatus new {@link UserStatus} to apply
+     * @return updated {@link UserResponse}
+     */
+    UserResponse updateUserStatus(Long userId, UserStatus newStatus);
 
     /**
      * Retrieves all users persisted in the system.
      *
-     * @return list of all {@link User} records
+     * @return list of all {@link User} entities
      */
-    public List<User> findAll() {
-        log.debug("Fetching all users");
-        return userRepository.findAll();
-    }
+    List<User> findAll();
 
     /**
-     * Looks up a user by their primary key.
+     * Looks up a user entity by primary key.
      *
-     * @param id the user's database ID
-     * @return an {@link Optional} containing the user if found; empty otherwise
+     * @param id the user ID
+     * @return optional containing the user if found
      */
-    public Optional<User> findById(Long id) {
-        log.debug("Fetching user by id={}", id);
-        return userRepository.findById(id);
-    }
+    Optional<User> findById(Long id);
 
     /**
-     * Looks up a user by their email address.
+     * Looks up a user entity by email.
      *
-     * @param email the user's email address
-     * @return an {@link Optional} containing the user if found; empty otherwise
+     * @param email the user email
+     * @return optional containing the user if found
      */
-    public Optional<User> findByEmail(String email) {
-        log.debug("Fetching user by email={}", email);
-        return userRepository.findByEmail(email);
-    }
+    Optional<User> findByEmail(String email);
 
     /**
      * Checks if a user exists with the given email address.
      *
-     * @param email the email address to check
+     * @param email the email address
      * @return true if exists, false otherwise
      */
-    public boolean existsByEmail(String email) {
-        return Boolean.TRUE.equals(userRepository.existsByEmail(email));
-    }
+    boolean existsByEmail(String email);
 
     /**
-     * Retrieves users filtered by their platform role.
+     * Retrieves users matching the specified role.
      *
-     * @param role the {@link Role} to filter by
-     * @return list of matching users
+     * @param role the role to filter by
+     * @return list of users
      */
-    public List<User> findByRole(Role role) {
-        log.debug("Fetching users by role={}", role);
-        return userRepository.findByRole(role);
-    }
+    List<User> findByRole(Role role);
 
     /**
-     * Retrieves users filtered by their account status.
+     * Retrieves users matching the specified status.
      *
-     * @param status the {@link UserStatus} to filter by
-     * @return list of matching users
+     * @param status the status to filter by
+     * @return list of users
      */
-    public List<User> findByStatus(UserStatus status) {
-        log.debug("Fetching users by status={}", status);
-        return userRepository.findByStatus(status);
-    }
+    List<User> findByStatus(UserStatus status);
 
     /**
-     * Looks up a user by driver's license number.
+     * Looks up a user by driver license number.
      *
-     * @param driverLicenseNumber the driver license number
-     * @return an {@link Optional} containing the user if found; empty otherwise
+     * @param driverLicenseNumber driver license identifier
+     * @return optional containing user if found
      */
-    public Optional<User> findByDriverLicenseNumber(String driverLicenseNumber) {
-        log.debug("Fetching user by driverLicenseNumber={}", driverLicenseNumber);
-        return userRepository.findByDriverLicenseNumber(driverLicenseNumber);
-    }
+    Optional<User> findByDriverLicenseNumber(String driverLicenseNumber);
 
     /**
-     * Persists a new {@link User} to the database.
+     * Persists a new user entity.
      *
-     * @param user the user entity to save
-     * @return the saved entity with database-assigned ID
-     * @throws IllegalStateException if a user with the same email already exists
+     * @param user user entity to save
+     * @return saved entity
      */
-    @Transactional
-    public User save(User user) {
-        if (Boolean.TRUE.equals(userRepository.existsByEmail(user.getEmail()))) {
-            log.warn("Attempt to register duplicate email={}", user.getEmail());
-            throw new IllegalStateException(
-                    "A user with email '" + user.getEmail() + "' already exists.");
-        }
-        User saved = userRepository.save(user);
-        log.info("Created new user id={}, email={}, role={}", saved.getId(), saved.getEmail(), saved.getRole());
-        return saved;
-    }
+    User save(User user);
 
     /**
-     * Removes a user from the system by their primary key.
+     * Deletes a user by primary key.
      *
-     * @param id the ID of the user to delete
+     * @param id user ID
      */
-    @Transactional
-    public void deleteById(Long id) {
-        log.info("Deleting user id={}", id);
-        userRepository.deleteById(id);
-    }
+    void deleteById(Long id);
 }
