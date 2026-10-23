@@ -78,6 +78,15 @@ application:
       refresh-token:
         expiration: 604800000         # 7 days (604,800,000 ms)
 
+# ── SpringDoc OpenAPI 3 / Swagger UI ──────────────────────────────────────
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+
 # ── Logging ──────────────────────────────────────────────────────────────
 logging:
   level:
@@ -85,4 +94,5 @@ logging:
     org.springframework.web: INFO
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
 
