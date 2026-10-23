@@ -20,30 +20,40 @@ spring:
           uri: lb://USER-SERVICE
           predicates:
             - Path=/api/v1/users/**, /api/v1/auth/**
+          filters:
+            - AuthenticationFilter
 
         # 2. Vehicle Service  (/api/v1/vehicles/**)  +  Categories (/api/v1/categories/**)
         - id: vehicle-service
           uri: lb://VEHICLE-SERVICE
           predicates:
             - Path=/api/v1/vehicles/**, /api/v1/categories/**
+          filters:
+            - AuthenticationFilter
 
         # 3. Booking Service  (/api/v1/bookings/**)
         - id: booking-service
           uri: lb://BOOKING-SERVICE
           predicates:
             - Path=/api/v1/bookings/**
+          filters:
+            - AuthenticationFilter
 
         # 4. Payment Service  (/api/v1/payments/**)
         - id: payment-service
           uri: lb://PAYMENT-SERVICE
           predicates:
             - Path=/api/v1/payments/**
+          filters:
+            - AuthenticationFilter
 
         # 5. Notification Service  (/api/v1/notifications/**)
         - id: notification-service
           uri: lb://NOTIFICATION-SERVICE
           predicates:
             - Path=/api/v1/notifications/**
+          filters:
+            - AuthenticationFilter
 
       # ── Global CORS Configuration ─────────────────────────────────────────────
       # Handles pre-flight OPTIONS requests at the gateway layer so downstream
@@ -73,6 +83,12 @@ spring:
         # Ensure the gateway forwards the CORS headers even when no route matches
         add-to-simple-url-handler-mapping: true
 
+# ── Security & JWT Configuration ───────────────────────────────────────────
+application:
+  security:
+    jwt:
+      secret-key: NGRmYmE1ZjQ4M2E4ZjI4ZjM2YTkzMjQ5OTM2NWNlMWQ3OGFmOWY4ZDgyZGMzNzRmOWI0OTFhZmQ=
+
 # ── Eureka Client Configuration ──────────────────────────────────────────────
 eureka:
   client:
@@ -99,5 +115,6 @@ management:
 logging:
   level:
     com.rentride.apigateway: DEBUG
+    com.rentride.gateway: DEBUG
     org.springframework.cloud.gateway: INFO
     reactor.netty: INFO
