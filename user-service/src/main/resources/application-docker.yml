@@ -1,0 +1,13 @@
+# Docker environment profile for user-service
+spring:
+  datasource:
+    url: jdbc:postgresql://user-db:5432/rentride_user_db
+    username: postgres
+    password: postgres
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://service-registry:8761/eureka/
+  instance:
+    prefer-ip-address: true

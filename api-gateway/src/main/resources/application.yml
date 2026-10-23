@@ -1,0 +1,120 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      # ── Service Discovery Locator (fallback auto-routing via Eureka) ─────────
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+      # ── Declarative Route Definitions ────────────────────────────────────────
+      routes:
+
+        # 1. User Service  (/api/v1/users/**)  +  Auth endpoints (/api/v1/auth/**)
+        - id: user-service
+          uri: lb://USER-SERVICE
+          predicates:
+            - Path=/api/v1/users/**, /api/v1/auth/**
+          filters:
+            - AuthenticationFilter
+
+        # 2. Vehicle Service  (/api/v1/vehicles/**)  +  Categories (/api/v1/categories/**)
+        - id: vehicle-service
+          uri: lb://VEHICLE-SERVICE
+          predicates:
+            - Path=/api/v1/vehicles/**, /api/v1/categories/**
+          filters:
+            - AuthenticationFilter
+
+        # 3. Booking Service  (/api/v1/bookings/**)
+        - id: booking-service
+          uri: lb://BOOKING-SERVICE
+          predicates:
+            - Path=/api/v1/bookings/**
+          filters:
+            - AuthenticationFilter
+
+        # 4. Payment Service  (/api/v1/payments/**)
+        - id: payment-service
+          uri: lb://PAYMENT-SERVICE
+          predicates:
+            - Path=/api/v1/payments/**
+          filters:
+            - AuthenticationFilter
+
+        # 5. Notification Service  (/api/v1/notifications/**)
+        - id: notification-service
+          uri: lb://NOTIFICATION-SERVICE
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            - AuthenticationFilter
+
+      # ── Global CORS Configuration ─────────────────────────────────────────────
+      # Handles pre-flight OPTIONS requests at the gateway layer so downstream
+      # services do not need their own CORS configuration.
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origins:
+              - "http://localhost:3000"   # React / Next.js dev server
+              - "http://localhost:4200"   # Angular dev server
+            allowed-methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+            allowed-headers:
+              - "*"
+            exposed-headers:
+              - Authorization
+              - Link
+              - X-Total-Count
+              - X-Correlation-ID
+            allow-credentials: true
+            max-age: 3600
+        # Ensure the gateway forwards the CORS headers even when no route matches
+        add-to-simple-url-handler-mapping: true
+
+# ── Security & JWT Configuration ───────────────────────────────────────────
+application:
+  security:
+    jwt:
+      secret-key: NGRmYmE1ZjQ4M2E4ZjI4ZjM2YTkzMjQ5OTM2NWNlMWQ3OGFmOWY4ZDgyZGMzNzRmOWI0OTFhZmQ=
+
+# ── Eureka Client Configuration ──────────────────────────────────────────────
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+
+# ── Actuator Endpoints ────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, gateway
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.rentride.apigateway: DEBUG
+    com.rentride.gateway: DEBUG
+    org.springframework.cloud.gateway: INFO
+    reactor.netty: INFO
