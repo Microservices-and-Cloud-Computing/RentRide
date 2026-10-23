@@ -44,6 +44,16 @@ public class JwtService {
     }
 
     /**
+     * Alias for {@link #generateToken(User)} explicitly named generateAccessToken.
+     *
+     * @param user user entity representing subject
+     * @return signed JWT access token string
+     */
+    public String generateAccessToken(User user) {
+        return generateToken(user);
+    }
+
+    /**
      * Generates an access token with additional custom claims.
      *
      * @param extraClaims map of additional claims

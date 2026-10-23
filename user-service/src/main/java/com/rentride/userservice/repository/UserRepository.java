@@ -4,6 +4,7 @@ import com.rentride.userservice.entity.Role;
 import com.rentride.userservice.entity.User;
 import com.rentride.userservice.entity.UserStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -15,7 +16,7 @@ import java.util.Optional;
  * <p>Provides full CRUD operations and lookup methods mapped to schema indexes.
  */
 @Repository
-public interface UserRepository extends JpaRepository<User, Long> {
+public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificationExecutor<User> {
 
     /**
      * Looks up a user by their unique email address.
