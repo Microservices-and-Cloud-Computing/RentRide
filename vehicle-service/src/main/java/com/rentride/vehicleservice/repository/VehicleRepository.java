@@ -2,7 +2,13 @@ package com.rentride.vehicleservice.repository;
 
 import com.rentride.vehicleservice.entity.Vehicle;
 import com.rentride.vehicleservice.entity.VehicleStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -12,10 +18,18 @@ import java.util.Optional;
  * Spring Data JPA repository for {@link Vehicle} inventory entities.
  *
  * <p>Provides fleet query capabilities, status filtering, geographic availability lookups,
- * and uniqueness validation.
+ * dynamic specification execution with eager category fetching, and uniqueness validation.
  */
 @Repository
-public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
+public interface VehicleRepository extends JpaRepository<Vehicle, Long>, JpaSpecificationExecutor<Vehicle> {
+
+    /**
+     * Executes dynamic specification search query, eagerly loading the associated {@code Category}
+     * via an entity graph to eliminate N+1 select queries during pagination.
+     */
+    @Override
+    @EntityGraph(attributePaths = {"category"})
+    Page<Vehicle> findAll(@Nullable Specification<Vehicle> spec, Pageable pageable);
 
     /**
      * Retrieves all vehicles registered under a specific rental provider.

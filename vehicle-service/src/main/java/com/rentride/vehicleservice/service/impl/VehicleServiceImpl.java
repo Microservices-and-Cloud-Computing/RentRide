@@ -1,8 +1,14 @@
 package com.rentride.vehicleservice.service.impl;
 
+import com.rentride.vehicleservice.dto.PaginatedResponse;
 import com.rentride.vehicleservice.dto.VehicleCreateRequest;
 import com.rentride.vehicleservice.dto.VehicleResponse;
+import com.rentride.vehicleservice.dto.VehicleSearchCriteria;
 import com.rentride.vehicleservice.dto.VehicleUpdateRequest;
+import com.rentride.vehicleservice.specification.VehicleSpecification;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import com.rentride.vehicleservice.entity.Category;
 import com.rentride.vehicleservice.entity.Vehicle;
 import com.rentride.vehicleservice.entity.VehicleStatus;
@@ -136,6 +142,17 @@ public class VehicleServiceImpl implements VehicleService {
         vehicle.setStatus(VehicleStatus.DECOMMISSIONED);
         vehicleRepository.save(vehicle);
         log.info("Successfully decommissioned vehicle id={}", vehicleId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PaginatedResponse<VehicleResponse> searchVehicles(VehicleSearchCriteria criteria, Pageable pageable) {
+        log.debug("Executing customer vehicle search with criteria={}, pageable={}", criteria, pageable);
+
+        Specification<Vehicle> spec = VehicleSpecification.build(criteria);
+        Page<Vehicle> vehiclePage = vehicleRepository.findAll(spec, pageable);
+
+        return PaginatedResponse.fromPage(vehiclePage, this::mapToResponse);
     }
 
     private VehicleResponse mapToResponse(Vehicle vehicle) {

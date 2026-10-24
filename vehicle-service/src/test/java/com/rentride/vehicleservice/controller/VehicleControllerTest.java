@@ -1,8 +1,10 @@
 package com.rentride.vehicleservice.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rentride.vehicleservice.dto.PaginatedResponse;
 import com.rentride.vehicleservice.dto.VehicleCreateRequest;
 import com.rentride.vehicleservice.dto.VehicleResponse;
+import com.rentride.vehicleservice.dto.VehicleSearchCriteria;
 import com.rentride.vehicleservice.dto.VehicleUpdateRequest;
 import com.rentride.vehicleservice.entity.FuelType;
 import com.rentride.vehicleservice.entity.TransmissionType;
@@ -311,5 +313,47 @@ class VehicleControllerTest {
                 .andExpect(jsonPath("$.status", is(400)))
                 .andExpect(jsonPath("$.error", is("Bad Request")))
                 .andExpect(jsonPath("$.validationErrors", notNullValue()));
+    }
+
+    @Test
+    @DisplayName("testSearchVehicles_Success: Public search with parameters returns 200 OK and paginated response")
+    void testSearchVehicles_Success() throws Exception {
+        VehicleResponse response = VehicleResponse.builder()
+                .id(1L)
+                .providerId(10L)
+                .make("Toyota")
+                .model("Aqua")
+                .licensePlateNumber("WP-CBA-9090")
+                .status(VehicleStatus.AVAILABLE)
+                .location("Colombo")
+                .dailyRentalRate(new BigDecimal("8500.00"))
+                .build();
+
+        PaginatedResponse<VehicleResponse> paginatedResponse = PaginatedResponse.<VehicleResponse>builder()
+                .content(List.of(response))
+                .pageNo(0)
+                .pageSize(10)
+                .totalElements(1L)
+                .totalPages(1)
+                .last(true)
+                .build();
+
+        when(vehicleService.searchVehicles(any(VehicleSearchCriteria.class), any())).thenReturn(paginatedResponse);
+
+        mockMvc.perform(get("/api/v1/vehicles/search")
+                        .param("location", "Colombo")
+                        .param("minPrice", "5000.00")
+                        .param("maxPrice", "10000.00")
+                        .param("page", "0")
+                        .param("size", "10")
+                        .param("sortBy", "dailyRentalRate")
+                        .param("sortDir", "asc"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].make", is("Toyota")))
+                .andExpect(jsonPath("$.content[0].location", is("Colombo")))
+                .andExpect(jsonPath("$.totalElements", is(1)))
+                .andExpect(jsonPath("$.pageNo", is(0)))
+                .andExpect(jsonPath("$.last", is(true)));
     }
 }

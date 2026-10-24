@@ -1,8 +1,11 @@
 package com.rentride.vehicleservice.service;
 
+import com.rentride.vehicleservice.dto.PaginatedResponse;
 import com.rentride.vehicleservice.dto.VehicleCreateRequest;
 import com.rentride.vehicleservice.dto.VehicleResponse;
+import com.rentride.vehicleservice.dto.VehicleSearchCriteria;
 import com.rentride.vehicleservice.dto.VehicleUpdateRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -55,4 +58,14 @@ public interface VehicleService {
      * @param providerId ID of the requesting provider
      */
     void deleteVehicle(Long vehicleId, Long providerId);
+
+    /**
+     * Executes a dynamic multi-criteria search for vehicles with pagination and sorting.
+     * Only returns vehicles with AVAILABLE status.
+     *
+     * @param criteria dynamic filtering criteria
+     * @param pageable pagination and sorting configuration
+     * @return paginated response containing matching vehicle records
+     */
+    PaginatedResponse<VehicleResponse> searchVehicles(VehicleSearchCriteria criteria, Pageable pageable);
 }

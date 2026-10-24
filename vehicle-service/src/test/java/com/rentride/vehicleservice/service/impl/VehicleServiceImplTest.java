@@ -1,8 +1,15 @@
 package com.rentride.vehicleservice.service.impl;
 
+import com.rentride.vehicleservice.dto.PaginatedResponse;
 import com.rentride.vehicleservice.dto.VehicleCreateRequest;
 import com.rentride.vehicleservice.dto.VehicleResponse;
+import com.rentride.vehicleservice.dto.VehicleSearchCriteria;
 import com.rentride.vehicleservice.dto.VehicleUpdateRequest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import com.rentride.vehicleservice.entity.Category;
 import com.rentride.vehicleservice.entity.FuelType;
 import com.rentride.vehicleservice.entity.TransmissionType;
@@ -255,5 +262,31 @@ class VehicleServiceImplTest {
 
         assertThrows(UnauthorizedAccessException.class, () -> vehicleService.deleteVehicle(100L, 99L));
         verify(vehicleRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("testSearchVehicles_Success: Applies criteria and returns paginated mapped response")
+    void testSearchVehicles_Success() {
+        VehicleSearchCriteria criteria = VehicleSearchCriteria.builder()
+                .location("Colombo")
+                .minPrice(new BigDecimal("5000.00"))
+                .maxPrice(new BigDecimal("10000.00"))
+                .build();
+
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<Vehicle> mockPage = new PageImpl<>(List.of(testVehicle), pageable, 1L);
+
+        when(vehicleRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(mockPage);
+
+        PaginatedResponse<VehicleResponse> response = vehicleService.searchVehicles(criteria, pageable);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getContent()).hasSize(1);
+        assertThat(response.getContent().get(0).getId()).isEqualTo(100L);
+        assertThat(response.getContent().get(0).getMake()).isEqualTo("Toyota");
+        assertThat(response.getTotalElements()).isEqualTo(1L);
+        assertThat(response.getPageNo()).isEqualTo(0);
+        assertThat(response.getPageSize()).isEqualTo(10);
+        assertThat(response.isLast()).isTrue();
     }
 }
