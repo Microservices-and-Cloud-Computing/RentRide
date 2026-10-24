@@ -1,12 +1,19 @@
 package com.rentride.vehicleservice.controller;
 
+import com.rentride.vehicleservice.dto.PaginatedResponse;
 import com.rentride.vehicleservice.dto.VehicleCreateRequest;
 import com.rentride.vehicleservice.dto.VehicleResponse;
+import com.rentride.vehicleservice.dto.VehicleSearchCriteria;
 import com.rentride.vehicleservice.dto.VehicleUpdateRequest;
+import com.rentride.vehicleservice.entity.FuelType;
+import com.rentride.vehicleservice.entity.TransmissionType;
 import com.rentride.vehicleservice.service.VehicleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -17,9 +24,12 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 
 /**
  * REST controller exposing endpoints for vehicle inventory CRUD operations,
@@ -76,6 +86,69 @@ public class VehicleController {
         log.info("REST PUT /api/v1/vehicles/{}: providerId={}, role={}", id, providerId, userRole);
 
         VehicleResponse response = vehicleService.updateVehicle(id, providerId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of(
+            "dailyRentalRate", "createdAt", "manufacturingYear", "make", "model", "seatingCapacity"
+    );
+
+    /**
+     * Public search endpoint for customer inventory discovery.
+     * Supports dynamic filtering by category, location, pricing, fuel type, transmission,
+     * minimum seats, with pagination and sorting.
+     * Only returns vehicles with AVAILABLE status.
+     *
+     * @param categoryId optional category ID
+     * @param location optional location keyword
+     * @param minPrice optional minimum daily rental rate
+     * @param maxPrice optional maximum daily rental rate
+     * @param fuelType optional fuel type
+     * @param transmission optional transmission type
+     * @param minSeats optional minimum seating capacity
+     * @param page zero-based page number (default: 0)
+     * @param size page size (default: 10, max: 50)
+     * @param sortBy sort field (default: "dailyRentalRate")
+     * @param sortDir sort direction (default: "asc")
+     * @return 200 OK with paginated vehicle response
+     */
+    @GetMapping("/search")
+    public ResponseEntity<PaginatedResponse<VehicleResponse>> searchVehicles(
+            @RequestParam(value = "categoryId", required = false) Long categoryId,
+            @RequestParam(value = "location", required = false) String location,
+            @RequestParam(value = "minPrice", required = false) BigDecimal minPrice,
+            @RequestParam(value = "maxPrice", required = false) BigDecimal maxPrice,
+            @RequestParam(value = "fuelType", required = false) FuelType fuelType,
+            @RequestParam(value = "transmission", required = false) TransmissionType transmission,
+            @RequestParam(value = "minSeats", required = false) Integer minSeats,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "10") int size,
+            @RequestParam(value = "sortBy", defaultValue = "dailyRentalRate") String sortBy,
+            @RequestParam(value = "sortDir", defaultValue = "asc") String sortDir) {
+
+        log.info("REST GET /api/v1/vehicles/search: location={}, minPrice={}, maxPrice={}, page={}, size={}, sortBy={}",
+                location, minPrice, maxPrice, page, size, sortBy);
+
+        // Sanitize pagination parameters
+        int sanitizedPage = Math.max(page, 0);
+        int sanitizedSize = (size <= 0) ? 10 : Math.min(size, 50);
+
+        // Sanitize sorting field to prevent query injection / invalid property paths
+        String sanitizedSortBy = ALLOWED_SORT_FIELDS.contains(sortBy) ? sortBy : "dailyRentalRate";
+        Sort.Direction direction = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(sanitizedPage, sanitizedSize, Sort.by(direction, sanitizedSortBy));
+
+        VehicleSearchCriteria criteria = VehicleSearchCriteria.builder()
+                .categoryId(categoryId)
+                .location(location)
+                .minPrice(minPrice)
+                .maxPrice(maxPrice)
+                .fuelType(fuelType)
+                .transmission(transmission)
+                .minSeats(minSeats)
+                .build();
+
+        PaginatedResponse<VehicleResponse> response = vehicleService.searchVehicles(criteria, pageable);
         return ResponseEntity.ok(response);
     }
 
