@@ -1,9 +1,11 @@
 package com.rentride.vehicleservice.service;
 
 import com.rentride.vehicleservice.dto.PaginatedResponse;
+import com.rentride.vehicleservice.dto.VehicleAvailabilityResponse;
 import com.rentride.vehicleservice.dto.VehicleCreateRequest;
 import com.rentride.vehicleservice.dto.VehicleResponse;
 import com.rentride.vehicleservice.dto.VehicleSearchCriteria;
+import com.rentride.vehicleservice.dto.VehicleStatusUpdateRequest;
 import com.rentride.vehicleservice.dto.VehicleUpdateRequest;
 import org.springframework.data.domain.Pageable;
 
@@ -68,4 +70,22 @@ public interface VehicleService {
      * @return paginated response containing matching vehicle records
      */
     PaginatedResponse<VehicleResponse> searchVehicles(VehicleSearchCriteria criteria, Pageable pageable);
+
+    /**
+     * Atomically transitions a vehicle's operational status during reservation lifecycle events.
+     * Enforces concurrency control and domain state machine validation.
+     *
+     * @param vehicleId unique ID of the vehicle to update
+     * @param request status update payload containing target status and optional reason
+     * @return updated vehicle response details
+     */
+    VehicleResponse updateVehicleStatus(Long vehicleId, VehicleStatusUpdateRequest request);
+
+    /**
+     * Performs a lightweight query verifying vehicle existence, status, and reservation availability.
+     *
+     * @param vehicleId unique vehicle ID
+     * @return vehicle availability response payload
+     */
+    VehicleAvailabilityResponse checkVehicleAvailability(Long vehicleId);
 }

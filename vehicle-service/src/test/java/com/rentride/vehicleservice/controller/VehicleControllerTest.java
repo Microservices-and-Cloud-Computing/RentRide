@@ -2,15 +2,18 @@ package com.rentride.vehicleservice.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rentride.vehicleservice.dto.PaginatedResponse;
+import com.rentride.vehicleservice.dto.VehicleAvailabilityResponse;
 import com.rentride.vehicleservice.dto.VehicleCreateRequest;
 import com.rentride.vehicleservice.dto.VehicleResponse;
 import com.rentride.vehicleservice.dto.VehicleSearchCriteria;
+import com.rentride.vehicleservice.dto.VehicleStatusUpdateRequest;
 import com.rentride.vehicleservice.dto.VehicleUpdateRequest;
 import com.rentride.vehicleservice.entity.FuelType;
 import com.rentride.vehicleservice.entity.TransmissionType;
 import com.rentride.vehicleservice.entity.VehicleStatus;
 import com.rentride.vehicleservice.exception.DuplicateResourceException;
 import com.rentride.vehicleservice.exception.GlobalExceptionHandler;
+import com.rentride.vehicleservice.exception.InvalidStateTransitionException;
 import com.rentride.vehicleservice.exception.ResourceNotFoundException;
 import com.rentride.vehicleservice.exception.UnauthorizedAccessException;
 import com.rentride.vehicleservice.service.VehicleService;
@@ -38,6 +41,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -355,5 +359,116 @@ class VehicleControllerTest {
                 .andExpect(jsonPath("$.totalElements", is(1)))
                 .andExpect(jsonPath("$.pageNo", is(0)))
                 .andExpect(jsonPath("$.last", is(true)));
+    }
+
+    // ── Commit 17 Status Update & Availability Tests ────────────────────────
+
+    @Test
+    @DisplayName("testUpdateVehicleStatus_Success: Valid status transition returns 200 OK")
+    void testUpdateVehicleStatus_Success() throws Exception {
+        VehicleStatusUpdateRequest request = VehicleStatusUpdateRequest.builder()
+                .status(VehicleStatus.RENTED)
+                .reason("Booking #102 confirmed")
+                .build();
+
+        VehicleResponse response = VehicleResponse.builder()
+                .id(1L)
+                .providerId(10L)
+                .make("Toyota")
+                .model("Aqua")
+                .status(VehicleStatus.RENTED)
+                .dailyRentalRate(new BigDecimal("8500.00"))
+                .build();
+
+        when(vehicleService.updateVehicleStatus(eq(1L), any(VehicleStatusUpdateRequest.class)))
+                .thenReturn(response);
+
+        mockMvc.perform(patch("/api/v1/vehicles/1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id", is(1)))
+                .andExpect(jsonPath("$.status", is("RENTED")));
+    }
+
+    @Test
+    @DisplayName("testUpdateVehicleStatus_InvalidTransition_Returns409Conflict")
+    void testUpdateVehicleStatus_InvalidTransition_Returns409Conflict() throws Exception {
+        VehicleStatusUpdateRequest request = VehicleStatusUpdateRequest.builder()
+                .status(VehicleStatus.RENTED)
+                .reason("Invalid re-rent")
+                .build();
+
+        when(vehicleService.updateVehicleStatus(eq(1L), any(VehicleStatusUpdateRequest.class)))
+                .thenThrow(new InvalidStateTransitionException("Invalid state transition from RENTED to RENTED for vehicle ID 1"));
+
+        mockMvc.perform(patch("/api/v1/vehicles/1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status", is(409)))
+                .andExpect(jsonPath("$.error", is("Conflict")))
+                .andExpect(jsonPath("$.message", is("Invalid state transition from RENTED to RENTED for vehicle ID 1")));
+    }
+
+    @Test
+    @DisplayName("testUpdateVehicleStatus_MissingStatus_Returns400BadRequest")
+    void testUpdateVehicleStatus_MissingStatus_Returns400BadRequest() throws Exception {
+        mockMvc.perform(patch("/api/v1/vehicles/1/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Missing status value\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status", is(400)))
+                .andExpect(jsonPath("$.validationErrors.status", notNullValue()));
+    }
+
+    @Test
+    @DisplayName("testUpdateVehicleStatus_NotFound_Returns404NotFound")
+    void testUpdateVehicleStatus_NotFound_Returns404NotFound() throws Exception {
+        VehicleStatusUpdateRequest request = VehicleStatusUpdateRequest.builder()
+                .status(VehicleStatus.RENTED)
+                .build();
+
+        when(vehicleService.updateVehicleStatus(eq(999L), any(VehicleStatusUpdateRequest.class)))
+                .thenThrow(new ResourceNotFoundException("Vehicle not found with id: 999"));
+
+        mockMvc.perform(patch("/api/v1/vehicles/999/status")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status", is(404)))
+                .andExpect(jsonPath("$.message", is("Vehicle not found with id: 999")));
+    }
+
+    @Test
+    @DisplayName("testCheckVehicleAvailability_Success: Returns 200 OK with availability response")
+    void testCheckVehicleAvailability_Success() throws Exception {
+        VehicleAvailabilityResponse response = VehicleAvailabilityResponse.builder()
+                .vehicleId(1L)
+                .status(VehicleStatus.AVAILABLE)
+                .isAvailable(true)
+                .dailyRentalRate(new BigDecimal("8500.00"))
+                .build();
+
+        when(vehicleService.checkVehicleAvailability(1L)).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/vehicles/1/availability"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.vehicleId", is(1)))
+                .andExpect(jsonPath("$.status", is("AVAILABLE")))
+                .andExpect(jsonPath("$.isAvailable", is(true)))
+                .andExpect(jsonPath("$.dailyRentalRate", is(8500.00)));
+    }
+
+    @Test
+    @DisplayName("testCheckVehicleAvailability_NotFound_Returns404NotFound")
+    void testCheckVehicleAvailability_NotFound_Returns404NotFound() throws Exception {
+        when(vehicleService.checkVehicleAvailability(999L))
+                .thenThrow(new ResourceNotFoundException("Vehicle not found with id: 999"));
+
+        mockMvc.perform(get("/api/v1/vehicles/999/availability"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status", is(404)))
+                .andExpect(jsonPath("$.error", is("Not Found")));
     }
 }

@@ -1,21 +1,19 @@
 package com.rentride.vehicleservice.service.impl;
 
 import com.rentride.vehicleservice.dto.PaginatedResponse;
+import com.rentride.vehicleservice.dto.VehicleAvailabilityResponse;
 import com.rentride.vehicleservice.dto.VehicleCreateRequest;
 import com.rentride.vehicleservice.dto.VehicleResponse;
 import com.rentride.vehicleservice.dto.VehicleSearchCriteria;
+import com.rentride.vehicleservice.dto.VehicleStatusUpdateRequest;
 import com.rentride.vehicleservice.dto.VehicleUpdateRequest;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import com.rentride.vehicleservice.entity.Category;
 import com.rentride.vehicleservice.entity.FuelType;
 import com.rentride.vehicleservice.entity.TransmissionType;
 import com.rentride.vehicleservice.entity.Vehicle;
 import com.rentride.vehicleservice.entity.VehicleStatus;
 import com.rentride.vehicleservice.exception.DuplicateResourceException;
+import com.rentride.vehicleservice.exception.InvalidStateTransitionException;
 import com.rentride.vehicleservice.exception.ResourceNotFoundException;
 import com.rentride.vehicleservice.exception.UnauthorizedAccessException;
 import com.rentride.vehicleservice.repository.CategoryRepository;
@@ -28,9 +26,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -209,10 +211,11 @@ class VehicleServiceImplTest {
         when(vehicleRepository.findById(999L)).thenReturn(Optional.empty());
 
         assertThrows(ResourceNotFoundException.class, () -> vehicleService.updateVehicle(999L, 10L, request));
+        verify(vehicleRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("testGetVehicleById_Success: Returns vehicle details")
+    @DisplayName("testGetVehicleById_Success: Returns mapped VehicleResponse")
     void testGetVehicleById_Success() {
         when(vehicleRepository.findById(100L)).thenReturn(Optional.of(testVehicle));
 
@@ -220,7 +223,8 @@ class VehicleServiceImplTest {
 
         assertThat(response.getId()).isEqualTo(100L);
         assertThat(response.getMake()).isEqualTo("Toyota");
-        assertThat(response.getCategoryName()).isEqualTo("SEDAN");
+        assertThat(response.getModel()).isEqualTo("Aqua");
+        assertThat(response.getStatus()).isEqualTo(VehicleStatus.AVAILABLE);
     }
 
     @Test
@@ -232,8 +236,8 @@ class VehicleServiceImplTest {
     }
 
     @Test
-    @DisplayName("testGetVehiclesByProvider_ReturnsList: Returns all vehicles owned by provider")
-    void testGetVehiclesByProvider_ReturnsList() {
+    @DisplayName("testGetVehiclesByProvider_Success: Returns fleet for given provider")
+    void testGetVehiclesByProvider_Success() {
         when(vehicleRepository.findByProviderId(10L)).thenReturn(List.of(testVehicle));
 
         List<VehicleResponse> fleet = vehicleService.getVehiclesByProvider(10L);
@@ -243,7 +247,7 @@ class VehicleServiceImplTest {
     }
 
     @Test
-    @DisplayName("testDeleteVehicle_Success: Soft-deletes vehicle by updating status to DECOMMISSIONED")
+    @DisplayName("testDeleteVehicle_Success: Soft-deletes vehicle by setting status to DECOMMISSIONED")
     void testDeleteVehicle_Success() {
         when(vehicleRepository.findById(100L)).thenReturn(Optional.of(testVehicle));
         when(vehicleRepository.save(any(Vehicle.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -264,6 +268,7 @@ class VehicleServiceImplTest {
         verify(vehicleRepository, never()).save(any());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     @DisplayName("testSearchVehicles_Success: Applies criteria and returns paginated mapped response")
     void testSearchVehicles_Success() {
@@ -288,5 +293,162 @@ class VehicleServiceImplTest {
         assertThat(response.getPageNo()).isEqualTo(0);
         assertThat(response.getPageSize()).isEqualTo(10);
         assertThat(response.isLast()).isTrue();
+    }
+
+    // ── Commit 17 Status Update & Availability Tests ────────────────────────
+
+    @Test
+    @DisplayName("testUpdateVehicleStatus_AvailableToRented_Success")
+    void testUpdateVehicleStatus_AvailableToRented_Success() {
+        testVehicle.setStatus(VehicleStatus.AVAILABLE);
+        when(vehicleRepository.findByIdWithPessimisticLock(100L)).thenReturn(Optional.of(testVehicle));
+        when(vehicleRepository.save(any(Vehicle.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        VehicleStatusUpdateRequest request = VehicleStatusUpdateRequest.builder()
+                .status(VehicleStatus.RENTED)
+                .reason("Booking #101 confirmed")
+                .build();
+
+        VehicleResponse response = vehicleService.updateVehicleStatus(100L, request);
+
+        assertThat(response.getStatus()).isEqualTo(VehicleStatus.RENTED);
+        verify(vehicleRepository).findByIdWithPessimisticLock(100L);
+        verify(vehicleRepository).save(testVehicle);
+    }
+
+    @Test
+    @DisplayName("testUpdateVehicleStatus_RentedToAvailable_Success")
+    void testUpdateVehicleStatus_RentedToAvailable_Success() {
+        testVehicle.setStatus(VehicleStatus.RENTED);
+        when(vehicleRepository.findByIdWithPessimisticLock(100L)).thenReturn(Optional.of(testVehicle));
+        when(vehicleRepository.save(any(Vehicle.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        VehicleStatusUpdateRequest request = VehicleStatusUpdateRequest.builder()
+                .status(VehicleStatus.AVAILABLE)
+                .reason("Vehicle returned in good condition")
+                .build();
+
+        VehicleResponse response = vehicleService.updateVehicleStatus(100L, request);
+
+        assertThat(response.getStatus()).isEqualTo(VehicleStatus.AVAILABLE);
+        verify(vehicleRepository).save(testVehicle);
+    }
+
+    @Test
+    @DisplayName("testUpdateVehicleStatus_RentedToMaintenance_Success")
+    void testUpdateVehicleStatus_RentedToMaintenance_Success() {
+        testVehicle.setStatus(VehicleStatus.RENTED);
+        when(vehicleRepository.findByIdWithPessimisticLock(100L)).thenReturn(Optional.of(testVehicle));
+        when(vehicleRepository.save(any(Vehicle.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        VehicleStatusUpdateRequest request = VehicleStatusUpdateRequest.builder()
+                .status(VehicleStatus.MAINTENANCE)
+                .reason("Returned for maintenance: tire damage")
+                .build();
+
+        VehicleResponse response = vehicleService.updateVehicleStatus(100L, request);
+
+        assertThat(response.getStatus()).isEqualTo(VehicleStatus.MAINTENANCE);
+        verify(vehicleRepository).save(testVehicle);
+    }
+
+    @Test
+    @DisplayName("testUpdateVehicleStatus_MaintenanceToAvailable_Success")
+    void testUpdateVehicleStatus_MaintenanceToAvailable_Success() {
+        testVehicle.setStatus(VehicleStatus.MAINTENANCE);
+        when(vehicleRepository.findByIdWithPessimisticLock(100L)).thenReturn(Optional.of(testVehicle));
+        when(vehicleRepository.save(any(Vehicle.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        VehicleStatusUpdateRequest request = VehicleStatusUpdateRequest.builder()
+                .status(VehicleStatus.AVAILABLE)
+                .reason("Maintenance inspection cleared")
+                .build();
+
+        VehicleResponse response = vehicleService.updateVehicleStatus(100L, request);
+
+        assertThat(response.getStatus()).isEqualTo(VehicleStatus.AVAILABLE);
+        verify(vehicleRepository).save(testVehicle);
+    }
+
+    @Test
+    @DisplayName("testUpdateVehicleStatus_InvalidTransition_RentedToRented_ThrowsException")
+    void testUpdateVehicleStatus_InvalidTransition_RentedToRented_ThrowsException() {
+        testVehicle.setStatus(VehicleStatus.RENTED);
+        when(vehicleRepository.findByIdWithPessimisticLock(100L)).thenReturn(Optional.of(testVehicle));
+
+        VehicleStatusUpdateRequest request = VehicleStatusUpdateRequest.builder()
+                .status(VehicleStatus.RENTED)
+                .reason("Duplicate rent attempt")
+                .build();
+
+        assertThrows(InvalidStateTransitionException.class, () ->
+                vehicleService.updateVehicleStatus(100L, request));
+        verify(vehicleRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("testUpdateVehicleStatus_InvalidTransition_MaintenanceToRented_ThrowsException")
+    void testUpdateVehicleStatus_InvalidTransition_MaintenanceToRented_ThrowsException() {
+        testVehicle.setStatus(VehicleStatus.MAINTENANCE);
+        when(vehicleRepository.findByIdWithPessimisticLock(100L)).thenReturn(Optional.of(testVehicle));
+
+        VehicleStatusUpdateRequest request = VehicleStatusUpdateRequest.builder()
+                .status(VehicleStatus.RENTED)
+                .reason("Direct booking attempt while in maintenance")
+                .build();
+
+        assertThrows(InvalidStateTransitionException.class, () ->
+                vehicleService.updateVehicleStatus(100L, request));
+        verify(vehicleRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("testUpdateVehicleStatus_NotFound_ThrowsResourceNotFoundException")
+    void testUpdateVehicleStatus_NotFound_ThrowsResourceNotFoundException() {
+        when(vehicleRepository.findByIdWithPessimisticLock(999L)).thenReturn(Optional.empty());
+
+        VehicleStatusUpdateRequest request = VehicleStatusUpdateRequest.builder()
+                .status(VehicleStatus.RENTED)
+                .build();
+
+        assertThrows(ResourceNotFoundException.class, () ->
+                vehicleService.updateVehicleStatus(999L, request));
+        verify(vehicleRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("testCheckVehicleAvailability_AvailableVehicle_ReturnsTrue")
+    void testCheckVehicleAvailability_AvailableVehicle_ReturnsTrue() {
+        testVehicle.setStatus(VehicleStatus.AVAILABLE);
+        when(vehicleRepository.findById(100L)).thenReturn(Optional.of(testVehicle));
+
+        VehicleAvailabilityResponse response = vehicleService.checkVehicleAvailability(100L);
+
+        assertThat(response.getVehicleId()).isEqualTo(100L);
+        assertThat(response.getStatus()).isEqualTo(VehicleStatus.AVAILABLE);
+        assertThat(response.isAvailable()).isTrue();
+        assertThat(response.getDailyRentalRate()).isEqualByComparingTo(new BigDecimal("8500.00"));
+    }
+
+    @Test
+    @DisplayName("testCheckVehicleAvailability_RentedVehicle_ReturnsFalse")
+    void testCheckVehicleAvailability_RentedVehicle_ReturnsFalse() {
+        testVehicle.setStatus(VehicleStatus.RENTED);
+        when(vehicleRepository.findById(100L)).thenReturn(Optional.of(testVehicle));
+
+        VehicleAvailabilityResponse response = vehicleService.checkVehicleAvailability(100L);
+
+        assertThat(response.getVehicleId()).isEqualTo(100L);
+        assertThat(response.getStatus()).isEqualTo(VehicleStatus.RENTED);
+        assertThat(response.isAvailable()).isFalse();
+    }
+
+    @Test
+    @DisplayName("testCheckVehicleAvailability_NotFound_ThrowsResourceNotFoundException")
+    void testCheckVehicleAvailability_NotFound_ThrowsResourceNotFoundException() {
+        when(vehicleRepository.findById(999L)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () ->
+                vehicleService.checkVehicleAvailability(999L));
     }
 }

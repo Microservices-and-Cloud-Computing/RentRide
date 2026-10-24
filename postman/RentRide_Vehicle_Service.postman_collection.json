@@ -1,246 +1,541 @@
 {
-	"info": {
-		"_postman_id": "9b1a7d2c-4e8f-4a3b-9c12-3f6e8d5a2b10",
-		"name": "RentRide - Vehicle Service (Commit 13)",
-		"description": "Postman test suite for verifying Vehicle Microservice scaffolding, JPA/database connectivity, Eureka discovery, and API Gateway edge routing.",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-	},
-	"item": [
-		{
-			"name": "1. Direct Vehicle Service Status (Port 8082)",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Status code is 200 OK\", function () {",
-							"    pm.response.to.have.status(200);",
-							"});",
-							"",
-							"pm.test(\"Verify vehicle-service payload structure\", function () {",
-							"    var jsonData = pm.response.json();",
-							"    pm.expect(jsonData.status).to.eql(\"UP\");",
-							"    pm.expect(jsonData.service).to.eql(\"vehicle-service\");",
-							"    pm.expect(jsonData.port).to.eql(8082);",
-							"});"
-						],
-						"type": "text/javascript"
-					}
-				}
-			],
-			"request": {
-				"method": "GET",
-				"header": [
-					{
-						"key": "Accept",
-						"value": "application/json"
-					}
-				],
-				"url": {
-					"raw": "http://localhost:8082/api/v1/vehicles/status",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "8082",
-					"path": [
-						"api",
-						"v1",
-						"vehicles",
-						"status"
-					]
-				},
-				"description": "Tests direct liveness and identity of vehicle-service on its native port 8082."
-			},
-			"response": []
-		},
-		{
-			"name": "2. Gateway Routed Vehicle Status (Port 8080)",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Gateway forwards request with 200 OK\", function () {",
-							"    pm.response.to.have.status(200);",
-							"});",
-							"",
-							"pm.test(\"Gateway successfully load-balanced to vehicle-service\", function () {",
-							"    var jsonData = pm.response.json();",
-							"    pm.expect(jsonData.status).to.eql(\"UP\");",
-							"    pm.expect(jsonData.service).to.eql(\"vehicle-service\");",
-							"    pm.expect(jsonData.port).to.eql(8082);",
-							"});"
-						],
-						"type": "text/javascript"
-					}
-				}
-			],
-			"request": {
-				"method": "GET",
-				"header": [
-					{
-						"key": "Accept",
-						"value": "application/json"
-					}
-				],
-				"url": {
-					"raw": "http://localhost:8080/api/v1/vehicles/status",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "8080",
-					"path": [
-						"api",
-						"v1",
-						"vehicles",
-						"status"
-					]
-				},
-				"description": "Verifies edge routing via Spring Cloud Gateway (port 8080) to vehicle-service via Eureka Service Discovery (lb://VEHICLE-SERVICE)."
-			},
-			"response": []
-		},
-		{
-			"name": "3. Actuator Health & DB Liveness (Port 8082)",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Status code is 200 OK\", function () {",
-							"    pm.response.to.have.status(200);",
-							"});",
-							"",
-							"pm.test(\"Overall health is UP and DB is connected\", function () {",
-							"    var jsonData = pm.response.json();",
-							"    pm.expect(jsonData.status).to.eql(\"UP\");",
-							"    if (jsonData.components && jsonData.components.db) {",
-							"        pm.expect(jsonData.components.db.status).to.eql(\"UP\");",
-							"    }",
-							"});"
-						],
-						"type": "text/javascript"
-					}
-				}
-			],
-			"request": {
-				"method": "GET",
-				"header": [
-					{
-						"key": "Accept",
-						"value": "application/json"
-					}
-				],
-				"url": {
-					"raw": "http://localhost:8082/actuator/health",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "8082",
-					"path": [
-						"actuator",
-						"health"
-					]
-				},
-				"description": "Verifies Actuator health details, including database (PostgreSQL/HikariCP) connectivity."
-			},
-			"response": []
-		},
-		{
-			"name": "4. Actuator Info Endpoint (Port 8082)",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Status code is 200 OK\", function () {",
-							"    pm.response.to.have.status(200);",
-							"});",
-							"",
-							"pm.test(\"Application metadata exists\", function () {",
-							"    var jsonData = pm.response.json();",
-							"    pm.expect(jsonData.app).to.be.an(\"object\");",
-							"    pm.expect(jsonData.app.name).to.eql(\"vehicle-service\");",
-							"});"
-						],
-						"type": "text/javascript"
-					}
-				}
-			],
-			"request": {
-				"method": "GET",
-				"header": [
-					{
-						"key": "Accept",
-						"value": "application/json"
-					}
-				],
-				"url": {
-					"raw": "http://localhost:8082/actuator/info",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "8082",
-					"path": [
-						"actuator",
-						"info"
-					]
-				},
-				"description": "Verifies exposed application info metadata from application.yml."
-			},
-			"response": []
-		},
-		{
-			"name": "5. Eureka Registry Instance Query (Port 8761)",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"pm.test(\"Status code is 200 OK\", function () {",
-							"    pm.response.to.have.status(200);",
-							"});",
-							"",
-							"pm.test(\"VEHICLE-SERVICE is registered in Eureka as UP\", function () {",
-							"    var jsonData = pm.response.json();",
-							"    pm.expect(jsonData.application.name).to.eql(\"VEHICLE-SERVICE\");",
-							"    var instance = jsonData.application.instance[0];",
-							"    pm.expect(instance.status).to.eql(\"UP\");",
-							"    pm.expect(instance.port[\"$\"]).to.eql(8082);",
-							"});"
-						],
-						"type": "text/javascript"
-					}
-				}
-			],
-			"request": {
-				"method": "GET",
-				"header": [
-					{
-						"key": "Accept",
-						"value": "application/json"
-					}
-				],
-				"url": {
-					"raw": "http://localhost:8761/eureka/apps/VEHICLE-SERVICE",
-					"protocol": "http",
-					"host": [
-						"localhost"
-					],
-					"port": "8761",
-					"path": [
-						"eureka",
-						"apps",
-						"VEHICLE-SERVICE"
-					]
-				},
-				"description": "Queries Eureka REST API to ensure VEHICLE-SERVICE is registered and reporting status UP on port 8082."
-			},
-			"response": []
-		}
-	]
+    "info":  {
+                 "_postman_id":  "9b1a7d2c-4e8f-4a3b-9c12-3f6e8d5a2b10",
+                 "name":  "RentRide - Vehicle Service (Commit 17)",
+                 "description":  "Postman test suite for verifying Vehicle Microservice scaffolding, JPA/database connectivity, Eureka discovery, dynamic search, and internal status transitions.",
+                 "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+             },
+    "item":  [
+                 {
+                     "name":  "1. Direct Vehicle Service Status (Port 8082)",
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\"Status code is 200 OK\", function () {",
+                                                                   "    pm.response.to.have.status(200);",
+                                                                   "});",
+                                                                   "",
+                                                                   "pm.test(\"Verify vehicle-service payload structure\", function () {",
+                                                                   "    var jsonData = pm.response.json();",
+                                                                   "    pm.expect(jsonData.status).to.eql(\"UP\");",
+                                                                   "    pm.expect(jsonData.service).to.eql(\"vehicle-service\");",
+                                                                   "    pm.expect(jsonData.port).to.eql(8082);",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  }
+                                   }
+                               ],
+                     "request":  {
+                                     "method":  "GET",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Accept",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "http://localhost:8082/api/v1/vehicles/status",
+                                                 "protocol":  "http",
+                                                 "host":  [
+                                                              "localhost"
+                                                          ],
+                                                 "port":  "8082",
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "vehicles",
+                                                              "status"
+                                                          ]
+                                             },
+                                     "description":  "Tests direct liveness and identity of vehicle-service on its native port 8082."
+                                 },
+                     "response":  [
+
+                                  ]
+                 },
+                 {
+                     "name":  "2. Gateway Routed Vehicle Status (Port 8080)",
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\"Gateway forwards request with 200 OK\", function () {",
+                                                                   "    pm.response.to.have.status(200);",
+                                                                   "});",
+                                                                   "",
+                                                                   "pm.test(\"Gateway successfully load-balanced to vehicle-service\", function () {",
+                                                                   "    var jsonData = pm.response.json();",
+                                                                   "    pm.expect(jsonData.status).to.eql(\"UP\");",
+                                                                   "    pm.expect(jsonData.service).to.eql(\"vehicle-service\");",
+                                                                   "    pm.expect(jsonData.port).to.eql(8082);",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  }
+                                   }
+                               ],
+                     "request":  {
+                                     "method":  "GET",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Accept",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "http://localhost:8080/api/v1/vehicles/status",
+                                                 "protocol":  "http",
+                                                 "host":  [
+                                                              "localhost"
+                                                          ],
+                                                 "port":  "8080",
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "vehicles",
+                                                              "status"
+                                                          ]
+                                             },
+                                     "description":  "Verifies edge routing via Spring Cloud Gateway (port 8080) to vehicle-service via Eureka Service Discovery (lb://VEHICLE-SERVICE)."
+                                 },
+                     "response":  [
+
+                                  ]
+                 },
+                 {
+                     "name":  "3. Actuator Health \u0026 DB Liveness (Port 8082)",
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\"Status code is 200 OK\", function () {",
+                                                                   "    pm.response.to.have.status(200);",
+                                                                   "});",
+                                                                   "",
+                                                                   "pm.test(\"Overall health is UP and DB is connected\", function () {",
+                                                                   "    var jsonData = pm.response.json();",
+                                                                   "    pm.expect(jsonData.status).to.eql(\"UP\");",
+                                                                   "    if (jsonData.components \u0026\u0026 jsonData.components.db) {",
+                                                                   "        pm.expect(jsonData.components.db.status).to.eql(\"UP\");",
+                                                                   "    }",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  }
+                                   }
+                               ],
+                     "request":  {
+                                     "method":  "GET",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Accept",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "http://localhost:8082/actuator/health",
+                                                 "protocol":  "http",
+                                                 "host":  [
+                                                              "localhost"
+                                                          ],
+                                                 "port":  "8082",
+                                                 "path":  [
+                                                              "actuator",
+                                                              "health"
+                                                          ]
+                                             },
+                                     "description":  "Verifies Actuator health details, including database (PostgreSQL/HikariCP) connectivity."
+                                 },
+                     "response":  [
+
+                                  ]
+                 },
+                 {
+                     "name":  "4. Actuator Info Endpoint (Port 8082)",
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\"Status code is 200 OK\", function () {",
+                                                                   "    pm.response.to.have.status(200);",
+                                                                   "});",
+                                                                   "",
+                                                                   "pm.test(\"Application metadata exists\", function () {",
+                                                                   "    var jsonData = pm.response.json();",
+                                                                   "    pm.expect(jsonData.app).to.be.an(\"object\");",
+                                                                   "    pm.expect(jsonData.app.name).to.eql(\"vehicle-service\");",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  }
+                                   }
+                               ],
+                     "request":  {
+                                     "method":  "GET",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Accept",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "http://localhost:8082/actuator/info",
+                                                 "protocol":  "http",
+                                                 "host":  [
+                                                              "localhost"
+                                                          ],
+                                                 "port":  "8082",
+                                                 "path":  [
+                                                              "actuator",
+                                                              "info"
+                                                          ]
+                                             },
+                                     "description":  "Verifies exposed application info metadata from application.yml."
+                                 },
+                     "response":  [
+
+                                  ]
+                 },
+                 {
+                     "name":  "5. Eureka Registry Instance Query (Port 8761)",
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\"Status code is 200 OK\", function () {",
+                                                                   "    pm.response.to.have.status(200);",
+                                                                   "});",
+                                                                   "",
+                                                                   "pm.test(\"VEHICLE-SERVICE is registered in Eureka as UP\", function () {",
+                                                                   "    var jsonData = pm.response.json();",
+                                                                   "    pm.expect(jsonData.application.name).to.eql(\"VEHICLE-SERVICE\");",
+                                                                   "    var instance = jsonData.application.instance[0];",
+                                                                   "    pm.expect(instance.status).to.eql(\"UP\");",
+                                                                   "    pm.expect(instance.port[\"$\"]).to.eql(8082);",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  }
+                                   }
+                               ],
+                     "request":  {
+                                     "method":  "GET",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Accept",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "http://localhost:8761/eureka/apps/VEHICLE-SERVICE",
+                                                 "protocol":  "http",
+                                                 "host":  [
+                                                              "localhost"
+                                                          ],
+                                                 "port":  "8761",
+                                                 "path":  [
+                                                              "eureka",
+                                                              "apps",
+                                                              "VEHICLE-SERVICE"
+                                                          ]
+                                             },
+                                     "description":  "Queries Eureka REST API to ensure VEHICLE-SERVICE is registered and reporting status UP on port 8082."
+                                 },
+                     "response":  [
+
+                                  ]
+                 },
+                 {
+                     "name":  "6. Check Vehicle Availability (Port 8082)",
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\"Status code is 200 OK\", function () {",
+                                                                   "    pm.response.to.have.status(200);",
+                                                                   "});",
+                                                                   "",
+                                                                   "pm.test(\"Verify availability payload structure\", function () {",
+                                                                   "    var jsonData = pm.response.json();",
+                                                                   "    pm.expect(jsonData.vehicleId).to.eql(1);",
+                                                                   "    pm.expect(jsonData.status).to.be.a(\"string\");",
+                                                                   "    pm.expect(jsonData.isAvailable).to.be.a(\"boolean\");",
+                                                                   "    pm.expect(jsonData.dailyRentalRate).to.be.a(\"number\");",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  }
+                                   }
+                               ],
+                     "request":  {
+                                     "method":  "GET",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Accept",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "http://localhost:8082/api/v1/vehicles/1/availability",
+                                                 "protocol":  "http",
+                                                 "host":  [
+                                                              "localhost"
+                                                          ],
+                                                 "port":  "8082",
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "vehicles",
+                                                              "1",
+                                                              "availability"
+                                                          ]
+                                             },
+                                     "description":  "Lightweight query returning vehicle existence, operational status, and real-time reservation availability."
+                                 },
+                     "response":  [
+
+                                  ]
+                 },
+                 {
+                     "name":  "7. Transition Vehicle Status to RENTED (Port 8082)",
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\"Status code is 200 OK\", function () {",
+                                                                   "    pm.response.to.have.status(200);",
+                                                                   "});",
+                                                                   "",
+                                                                   "pm.test(\"Status updated to RENTED\", function () {",
+                                                                   "    var jsonData = pm.response.json();",
+                                                                   "    pm.expect(jsonData.id).to.eql(1);",
+                                                                   "    pm.expect(jsonData.status).to.eql(\"RENTED\");",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  }
+                                   }
+                               ],
+                     "request":  {
+                                     "method":  "PATCH",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Accept",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\"status\": \"RENTED\", \"reason\": \"Booking #501 active\"}"
+                                              },
+                                     "url":  {
+                                                 "raw":  "http://localhost:8082/api/v1/vehicles/1/status",
+                                                 "protocol":  "http",
+                                                 "host":  [
+                                                              "localhost"
+                                                          ],
+                                                 "port":  "8082",
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "vehicles",
+                                                              "1",
+                                                              "status"
+                                                          ]
+                                             },
+                                     "description":  "Atomically transitions vehicle status from AVAILABLE to RENTED with pessimistic locking."
+                                 },
+                     "response":  [
+
+                                  ]
+                 },
+                 {
+                     "name":  "8. Reject Invalid Re-rent Status - 409 Conflict (Port 8082)",
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\"Status code is 409 Conflict\", function () {",
+                                                                   "    pm.response.to.have.status(409);",
+                                                                   "});",
+                                                                   "",
+                                                                   "pm.test(\"Verify conflict error message\", function () {",
+                                                                   "    var jsonData = pm.response.json();",
+                                                                   "    pm.expect(jsonData.status).to.eql(409);",
+                                                                   "    pm.expect(jsonData.error).to.eql(\"Conflict\");",
+                                                                   "    pm.expect(jsonData.message).to.include(\"Vehicle cannot transition from RENTED to RENTED\");",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  }
+                                   }
+                               ],
+                     "request":  {
+                                     "method":  "PATCH",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Accept",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\"status\": \"RENTED\", \"reason\": \"Duplicate booking attempt\"}"
+                                              },
+                                     "url":  {
+                                                 "raw":  "http://localhost:8082/api/v1/vehicles/1/status",
+                                                 "protocol":  "http",
+                                                 "host":  [
+                                                              "localhost"
+                                                          ],
+                                                 "port":  "8082",
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "vehicles",
+                                                              "1",
+                                                              "status"
+                                                          ]
+                                             },
+                                     "description":  "Verifies state machine rejects illegal status transitions with HTTP 409 Conflict."
+                                 },
+                     "response":  [
+
+                                  ]
+                 },
+                 {
+                     "name":  "9. Transition Vehicle Status to MAINTENANCE (Port 8082)",
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\"Status code is 200 OK\", function () {",
+                                                                   "    pm.response.to.have.status(200);",
+                                                                   "});",
+                                                                   "",
+                                                                   "pm.test(\"Status updated to MAINTENANCE\", function () {",
+                                                                   "    var jsonData = pm.response.json();",
+                                                                   "    pm.expect(jsonData.id).to.eql(1);",
+                                                                   "    pm.expect(jsonData.status).to.eql(\"MAINTENANCE\");",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  }
+                                   }
+                               ],
+                     "request":  {
+                                     "method":  "PATCH",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Accept",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\"status\": \"MAINTENANCE\", \"reason\": \"Brake pad replacement\"}"
+                                              },
+                                     "url":  {
+                                                 "raw":  "http://localhost:8082/api/v1/vehicles/1/status",
+                                                 "protocol":  "http",
+                                                 "host":  [
+                                                              "localhost"
+                                                          ],
+                                                 "port":  "8082",
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "vehicles",
+                                                              "1",
+                                                              "status"
+                                                          ]
+                                             },
+                                     "description":  "Transitions vehicle from RENTED to MAINTENANCE upon return with servicing requirements."
+                                 },
+                     "response":  [
+
+                                  ]
+                 },
+                 {
+                     "name":  "10. Release Vehicle Back to AVAILABLE (Port 8082)",
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "exec":  [
+                                                                   "pm.test(\"Status code is 200 OK\", function () {",
+                                                                   "    pm.response.to.have.status(200);",
+                                                                   "});",
+                                                                   "",
+                                                                   "pm.test(\"Status updated to AVAILABLE\", function () {",
+                                                                   "    var jsonData = pm.response.json();",
+                                                                   "    pm.expect(jsonData.id).to.eql(1);",
+                                                                   "    pm.expect(jsonData.status).to.eql(\"AVAILABLE\");",
+                                                                   "});"
+                                                               ],
+                                                      "type":  "text/javascript"
+                                                  }
+                                   }
+                               ],
+                     "request":  {
+                                     "method":  "PATCH",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Accept",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\"status\": \"AVAILABLE\", \"reason\": \"Maintenance completed\"}"
+                                              },
+                                     "url":  {
+                                                 "raw":  "http://localhost:8082/api/v1/vehicles/1/status",
+                                                 "protocol":  "http",
+                                                 "host":  [
+                                                              "localhost"
+                                                          ],
+                                                 "port":  "8082",
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "vehicles",
+                                                              "1",
+                                                              "status"
+                                                          ]
+                                             },
+                                     "description":  "Releases vehicle from MAINTENANCE back to AVAILABLE after inspection is cleared."
+                                 },
+                     "response":  [
+
+                                  ]
+                 }
+             ]
 }
