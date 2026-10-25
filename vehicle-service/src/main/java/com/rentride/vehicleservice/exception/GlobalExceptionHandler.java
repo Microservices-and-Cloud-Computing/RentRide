@@ -1,18 +1,24 @@
 package com.rentride.vehicleservice.exception;
 
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.rentride.vehicleservice.dto.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -42,9 +48,42 @@ public class GlobalExceptionHandler {
         ErrorResponse response = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.BAD_REQUEST.value())
-                .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
+                .error("Validation Failed")
                 .message("Validation failed for one or more fields")
                 .path(request.getRequestURI())
+                .errors(errors)
+                .validationErrors(errors)
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * Handles constraint violation exceptions triggered on query/path parameters.
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolationException(
+            ConstraintViolationException ex,
+            HttpServletRequest request) {
+
+        Map<String, String> errors = new LinkedHashMap<>();
+        for (ConstraintViolation<?> violation : ex.getConstraintViolations()) {
+            String propertyPath = violation.getPropertyPath().toString();
+            String fieldName = propertyPath.contains(".")
+                    ? propertyPath.substring(propertyPath.lastIndexOf('.') + 1)
+                    : propertyPath;
+            errors.put(fieldName, violation.getMessage());
+        }
+
+        log.warn("Constraint violation on path '{}': {}", request.getRequestURI(), errors);
+
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error("Validation Failed")
+                .message("Validation failed for one or more parameters")
+                .path(request.getRequestURI())
+                .errors(errors)
                 .validationErrors(errors)
                 .build();
 
@@ -157,24 +196,81 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Handles malformed or unreadable JSON request bodies.
+     * Handles malformed or unreadable JSON request bodies (e.g., invalid enum values or syntax errors).
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleHttpMessageNotReadableException(
             HttpMessageNotReadableException ex,
             HttpServletRequest request) {
 
-        log.warn("Malformed HTTP request body on path '{}': {}", request.getRequestURI(), ex.getMessage());
+        String userFriendlyMessage = "Malformed or unreadable JSON request body";
+
+        Throwable rootCause = ex.getMostSpecificCause();
+        if (rootCause instanceof InvalidFormatException ife) {
+            String fieldName = ife.getPath().isEmpty() ? "field" : ife.getPath().get(ife.getPath().size() - 1).getFieldName();
+            Class<?> targetType = ife.getTargetType();
+            if (targetType != null && targetType.isEnum()) {
+                String allowedValues = Arrays.toString(targetType.getEnumConstants());
+                userFriendlyMessage = String.format("Invalid value '%s' for %s. Accepted values: %s",
+                        ife.getValue(), fieldName, allowedValues);
+            } else {
+                userFriendlyMessage = String.format("Invalid value '%s' for field '%s'", ife.getValue(), fieldName);
+            }
+        }
+
+        log.warn("Malformed HTTP request body on path '{}': {}", request.getRequestURI(), userFriendlyMessage);
 
         ErrorResponse response = ErrorResponse.builder()
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.BAD_REQUEST.value())
                 .error(HttpStatus.BAD_REQUEST.getReasonPhrase())
-                .message("Malformed or unreadable JSON request body")
+                .message(userFriendlyMessage)
                 .path(request.getRequestURI())
                 .build();
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * Handles unsupported HTTP methods on endpoints (e.g. POST instead of GET).
+     */
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupportedException(
+            HttpRequestMethodNotSupportedException ex,
+            HttpServletRequest request) {
+
+        log.warn("Method not allowed on path '{}': {}", request.getRequestURI(), ex.getMessage());
+
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.METHOD_NOT_ALLOWED.value())
+                .error(HttpStatus.METHOD_NOT_ALLOWED.getReasonPhrase())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(response);
+    }
+
+    /**
+     * Handles requests to non-existent URLs/resources (404 Not Found).
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResourceFoundException(
+            NoResourceFoundException ex,
+            HttpServletRequest request) {
+
+        log.warn("Resource not found on path '{}': {}", request.getRequestURI(), ex.getMessage());
+
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.NOT_FOUND.value())
+                .error(HttpStatus.NOT_FOUND.getReasonPhrase())
+                .message("The requested endpoint was not found: " + request.getRequestURI())
+                .path(request.getRequestURI())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
     }
 
     /**

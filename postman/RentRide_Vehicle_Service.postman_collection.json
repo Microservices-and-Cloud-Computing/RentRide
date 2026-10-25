@@ -1,8 +1,8 @@
 {
     "info":  {
                  "_postman_id":  "9b1a7d2c-4e8f-4a3b-9c12-3f6e8d5a2b10",
-                 "name":  "RentRide - Vehicle Service (Commit 17)",
-                 "description":  "Postman test suite for verifying Vehicle Microservice scaffolding, JPA/database connectivity, Eureka discovery, dynamic search, and internal status transitions.",
+                 "name":  "RentRide - Vehicle Service (Commit 18)",
+                 "description":  "Postman test suite for verifying Vehicle Microservice scaffolding, JPA/database connectivity, Eureka discovery, dynamic search, internal status transitions, OpenAPI 3 Swagger UI, and Bean Validation.",
                  "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
              },
     "item":  [

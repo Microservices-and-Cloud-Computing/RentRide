@@ -1,5 +1,6 @@
 package com.rentride.vehicleservice.controller;
 
+import com.rentride.vehicleservice.dto.ErrorResponse;
 import com.rentride.vehicleservice.dto.PaginatedResponse;
 import com.rentride.vehicleservice.dto.VehicleAvailabilityResponse;
 import com.rentride.vehicleservice.dto.VehicleCreateRequest;
@@ -10,6 +11,15 @@ import com.rentride.vehicleservice.dto.VehicleUpdateRequest;
 import com.rentride.vehicleservice.entity.FuelType;
 import com.rentride.vehicleservice.entity.TransmissionType;
 import com.rentride.vehicleservice.service.VehicleService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +56,7 @@ import java.util.Set;
 @RequestMapping("/api/v1/vehicles")
 @RequiredArgsConstructor
 @Slf4j
+@Tag(name = "Vehicle Management", description = "Endpoints for vehicle catalog, category discovery, provider fleet operations, and availability status updates")
 public class VehicleController {
 
     private final VehicleService vehicleService;
@@ -59,8 +70,23 @@ public class VehicleController {
      * @return 201 Created with persisted VehicleResponse
      */
     @PostMapping
+    @Operation(
+            summary = "Register a new vehicle",
+            description = "Allows rental providers to onboard and register a new vehicle into their active fleet inventory",
+            security = { @SecurityRequirement(name = "bearerAuth"), @SecurityRequirement(name = "X-User-Id") }
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Vehicle registered successfully",
+                    content = @Content(schema = @Schema(implementation = VehicleResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation failed for request payload",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Duplicate license plate number conflict",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     public ResponseEntity<VehicleResponse> createVehicle(
+            @Parameter(description = "Provider user ID forwarded by gateway", required = true)
             @RequestHeader("X-User-Id") Long providerId,
+            @Parameter(description = "Caller role forwarded by gateway")
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @Valid @RequestBody VehicleCreateRequest request) {
 
@@ -81,9 +107,27 @@ public class VehicleController {
      * @return 200 OK with updated VehicleResponse
      */
     @PutMapping("/{id}")
+    @Operation(
+            summary = "Update vehicle listing",
+            description = "Allows the owning provider to update pricing, location, seating capacity, or operational status of a vehicle",
+            security = { @SecurityRequirement(name = "bearerAuth"), @SecurityRequirement(name = "X-User-Id") }
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Vehicle updated successfully",
+                    content = @Content(schema = @Schema(implementation = VehicleResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation failed for request payload",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Caller does not own this vehicle",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Vehicle not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     public ResponseEntity<VehicleResponse> updateVehicle(
+            @Parameter(description = "Vehicle unique ID", required = true)
             @PathVariable("id") Long id,
+            @Parameter(description = "Provider user ID forwarded by gateway", required = true)
             @RequestHeader("X-User-Id") Long providerId,
+            @Parameter(description = "Caller role forwarded by gateway")
             @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @Valid @RequestBody VehicleUpdateRequest request) {
 
@@ -117,17 +161,36 @@ public class VehicleController {
      * @return 200 OK with paginated vehicle response
      */
     @GetMapping("/search")
+    @Operation(
+            summary = "Search available vehicle inventory",
+            description = "Public catalog search allowing customers to filter active vehicles by category, location, price range, fuel type, transmission, and seat count with pagination and sorting"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Paginated list of available vehicles matching search criteria",
+                    content = @Content(schema = @Schema(implementation = PaginatedResponse.class)))
+    })
     public ResponseEntity<PaginatedResponse<VehicleResponse>> searchVehicles(
+            @Parameter(description = "Filter by category ID")
             @RequestParam(value = "categoryId", required = false) Long categoryId,
+            @Parameter(description = "Filter by location substring")
             @RequestParam(value = "location", required = false) String location,
+            @Parameter(description = "Filter by minimum daily rental rate")
             @RequestParam(value = "minPrice", required = false) BigDecimal minPrice,
+            @Parameter(description = "Filter by maximum daily rental rate")
             @RequestParam(value = "maxPrice", required = false) BigDecimal maxPrice,
+            @Parameter(description = "Filter by fuel type")
             @RequestParam(value = "fuelType", required = false) FuelType fuelType,
+            @Parameter(description = "Filter by transmission type")
             @RequestParam(value = "transmission", required = false) TransmissionType transmission,
+            @Parameter(description = "Filter by minimum seating capacity")
             @RequestParam(value = "minSeats", required = false) Integer minSeats,
+            @Parameter(description = "Zero-based page index (default 0)")
             @RequestParam(value = "page", defaultValue = "0") int page,
+            @Parameter(description = "Number of items per page (default 10, max 50)")
             @RequestParam(value = "size", defaultValue = "10") int size,
+            @Parameter(description = "Sort property (dailyRentalRate, createdAt, manufacturingYear, make, model, seatingCapacity)")
             @RequestParam(value = "sortBy", defaultValue = "dailyRentalRate") String sortBy,
+            @Parameter(description = "Sort direction (asc or desc)")
             @RequestParam(value = "sortDir", defaultValue = "asc") String sortDir) {
 
         log.info("REST GET /api/v1/vehicles/search: location={}, minPrice={}, maxPrice={}, page={}, size={}, sortBy={}",
@@ -163,7 +226,19 @@ public class VehicleController {
      * @return 200 OK with VehicleResponse
      */
     @GetMapping("/{id}")
-    public ResponseEntity<VehicleResponse> getVehicleById(@PathVariable("id") Long id) {
+    @Operation(
+            summary = "Get vehicle by ID",
+            description = "Public catalog endpoint to view full specifications and details of an individual vehicle"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Vehicle details retrieved successfully",
+                    content = @Content(schema = @Schema(implementation = VehicleResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Vehicle not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public ResponseEntity<VehicleResponse> getVehicleById(
+            @Parameter(description = "Vehicle unique ID", required = true)
+            @PathVariable("id") Long id) {
         log.info("REST GET /api/v1/vehicles/{}", id);
 
         VehicleResponse response = vehicleService.getVehicleById(id);
@@ -178,8 +253,21 @@ public class VehicleController {
      * @return 200 OK with list of VehicleResponse
      */
     @GetMapping("/provider/my-fleet")
+    @Operation(
+            summary = "Get provider fleet",
+            description = "Retrieves all vehicles owned and managed by the authenticated provider",
+            security = { @SecurityRequirement(name = "bearerAuth"), @SecurityRequirement(name = "X-User-Id") }
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "List of vehicles in the provider's fleet",
+                    content = @Content(array = @ArraySchema(schema = @Schema(implementation = VehicleResponse.class)))),
+            @ApiResponse(responseCode = "400", description = "Missing required X-User-Id header",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     public ResponseEntity<List<VehicleResponse>> getMyFleet(
+            @Parameter(description = "Provider user ID forwarded by gateway", required = true)
             @RequestHeader("X-User-Id") Long providerId,
+            @Parameter(description = "Caller role forwarded by gateway")
             @RequestHeader(value = "X-User-Role", required = false) String userRole) {
 
         log.info("REST GET /api/v1/vehicles/provider/my-fleet: providerId={}, role={}", providerId, userRole);
@@ -197,9 +285,24 @@ public class VehicleController {
      * @return 204 No Content
      */
     @DeleteMapping("/{id}")
+    @Operation(
+            summary = "Delete vehicle listing",
+            description = "Allows the owning provider to remove or decommission a vehicle from their active fleet",
+            security = { @SecurityRequirement(name = "bearerAuth"), @SecurityRequirement(name = "X-User-Id") }
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Vehicle deleted successfully"),
+            @ApiResponse(responseCode = "403", description = "Caller does not own this vehicle",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Vehicle not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     public ResponseEntity<Void> deleteVehicle(
+            @Parameter(description = "Vehicle unique ID", required = true)
             @PathVariable("id") Long id,
+            @Parameter(description = "Provider user ID forwarded by gateway", required = true)
             @RequestHeader("X-User-Id") Long providerId,
+            @Parameter(description = "Caller role forwarded by gateway")
             @RequestHeader(value = "X-User-Role", required = false) String userRole) {
 
         log.info("REST DELETE /api/v1/vehicles/{}: providerId={}, role={}", id, providerId, userRole);
@@ -219,7 +322,22 @@ public class VehicleController {
      * @return 200 OK with updated VehicleResponse
      */
     @PatchMapping("/{id}/status")
+    @Operation(
+            summary = "Update vehicle operational status",
+            description = "Internal service endpoint used to atomically transition vehicle status (AVAILABLE <-> RENTED, RENTED -> MAINTENANCE, MAINTENANCE -> AVAILABLE) during reservation lifecycle events"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Vehicle status updated successfully",
+                    content = @Content(schema = @Schema(implementation = VehicleResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Validation failed for status update payload",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Vehicle not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "Invalid operational state transition conflict",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     public ResponseEntity<VehicleResponse> updateVehicleStatus(
+            @Parameter(description = "Vehicle unique ID", required = true)
             @PathVariable("id") Long id,
             @Valid @RequestBody VehicleStatusUpdateRequest request) {
 
@@ -237,7 +355,18 @@ public class VehicleController {
      * @return 200 OK with VehicleAvailabilityResponse
      */
     @GetMapping("/{id}/availability")
+    @Operation(
+            summary = "Check vehicle availability",
+            description = "Lightweight query endpoint to verify vehicle existence, current status, and rental eligibility before reservation"
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Vehicle availability status and daily rate",
+                    content = @Content(schema = @Schema(implementation = VehicleAvailabilityResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Vehicle not found",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     public ResponseEntity<VehicleAvailabilityResponse> checkVehicleAvailability(
+            @Parameter(description = "Vehicle unique ID", required = true)
             @PathVariable("id") Long id) {
 
         log.info("REST GET /api/v1/vehicles/{}/availability", id);

@@ -1,5 +1,6 @@
 package com.rentride.vehicleservice.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,13 +19,25 @@ import java.util.function.Function;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Schema(description = "Generic paginated response wrapper")
 public class PaginatedResponse<T> {
 
+    @Schema(description = "List of items contained in the current page")
     private List<T> content;
+
+    @Schema(description = "Current page index (zero-based)", example = "0")
     private int pageNo;
+
+    @Schema(description = "Configured page size", example = "10")
     private int pageSize;
+
+    @Schema(description = "Total number of elements matching query criteria across all pages", example = "25")
     private long totalElements;
+
+    @Schema(description = "Total number of pages", example = "3")
     private int totalPages;
+
+    @Schema(description = "Whether this is the final page", example = "false")
     private boolean last;
 
     /**

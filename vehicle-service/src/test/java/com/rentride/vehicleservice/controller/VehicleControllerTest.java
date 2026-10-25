@@ -315,7 +315,8 @@ class VehicleControllerTest {
                         .content(objectMapper.writeValueAsString(invalidRequest)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status", is(400)))
-                .andExpect(jsonPath("$.error", is("Bad Request")))
+                .andExpect(jsonPath("$.error", is("Validation Failed")))
+                .andExpect(jsonPath("$.errors", notNullValue()))
                 .andExpect(jsonPath("$.validationErrors", notNullValue()));
     }
 
