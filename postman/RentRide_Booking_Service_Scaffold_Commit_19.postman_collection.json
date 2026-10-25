@@ -1,0 +1,190 @@
+{
+  "info": {
+    "_postman_id": "c1900000-booking-service-scaffold-rentride",
+    "name": "RentRide - Booking Service Scaffold (Commit 19)",
+    "description": "Postman test suite for verifying Booking Microservice scaffolding, Eureka discovery registration, diagnostic status, Actuator endpoints, and API Gateway routing.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Direct Booking Service Status (Port 8083)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Verify booking-service payload structure\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(\"UP\");",
+              "    pm.expect(jsonData.service).to.eql(\"booking-service\");",
+              "    pm.expect(jsonData.port).to.eql(8083);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8083/api/v1/bookings/status",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8083",
+          "path": [
+            "api",
+            "v1",
+            "bookings",
+            "status"
+          ]
+        },
+        "description": "Tests direct liveness and identity of booking-service on native port 8083."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Gateway Routed Booking Status (Port 8080)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Gateway forwards request with 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Gateway successfully load-balanced to booking-service\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(\"UP\");",
+              "    pm.expect(jsonData.service).to.eql(\"booking-service\");",
+              "    pm.expect(jsonData.port).to.eql(8083);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8080/api/v1/bookings/status",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8080",
+          "path": [
+            "api",
+            "v1",
+            "bookings",
+            "status"
+          ]
+        },
+        "description": "Tests routing and load-balancing through the API Gateway (port 8080) to booking-service via Eureka."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Booking Service Actuator Health",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Health status is UP\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(\"UP\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8083/actuator/health",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8083",
+          "path": [
+            "actuator",
+            "health"
+          ]
+        },
+        "description": "Verifies Spring Boot Actuator health endpoint on booking-service."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Booking Service Actuator Info",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:8083/actuator/info",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "8083",
+          "path": [
+            "actuator",
+            "info"
+          ]
+        },
+        "description": "Verifies Spring Boot Actuator info endpoint on booking-service."
+      },
+      "response": []
+    }
+  ]
+}
+

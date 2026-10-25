@@ -19,6 +19,7 @@ public class RouterValidator {
             "/api/v1/auth/login",
             "/api/v1/auth/refresh",
             "/api/v1/vehicles/status",
+            "/api/v1/bookings/status",
             "/eureka/**",
             "/actuator/**",
             "/v3/api-docs/**",
