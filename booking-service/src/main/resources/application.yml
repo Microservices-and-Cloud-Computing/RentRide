@@ -32,6 +32,16 @@ spring:
         jdbc:
           time_zone: UTC
 
+  # -- Spring Cloud OpenFeign -------------------------------------------------
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: 3000
+            read-timeout: 5000
+            logger-level: basic
+
 # -- Eureka Client Configuration ---------------------------------------------
 eureka:
   client:
