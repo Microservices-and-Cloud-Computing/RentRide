@@ -5,7 +5,7 @@ spring:
   application:
     name: vehicle-service
 
-  # â”€â”€ DataSource (HikariCP & PostgreSQL) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -- DataSource (HikariCP & PostgreSQL) ------------------------------------
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/rentride_vehicle_db}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
@@ -21,7 +21,7 @@ spring:
       # Fail-fast on startup if the database is unreachable
       initialization-fail-timeout: 1
 
-  # â”€â”€ JPA / Hibernate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  # -- JPA / Hibernate ------------------------------------------------------
   jpa:
     hibernate:
       ddl-auto: update
@@ -30,11 +30,10 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        dialect: ${SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT:org.hibernate.dialect.PostgreSQLDialect}
         jdbc:
           time_zone: UTC
 
-# â”€â”€ Eureka Client Configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Eureka Client Configuration ---------------------------------------------
 eureka:
   client:
     service-url:
@@ -45,7 +44,7 @@ eureka:
     prefer-ip-address: true
     instance-id: ${spring.application.name}:${random.uuid}
 
-# â”€â”€ Actuator Management Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# -- Actuator Management Endpoints -------------------------------------------
 management:
   endpoints:
     web:
@@ -57,17 +56,3 @@ management:
   info:
     env:
       enabled: true
-
-# â”€â”€ Application Metadata (surfaced via /actuator/info) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-info:
-  app:
-    name: ${spring.application.name}
-    description: Vehicle & Catalog Management Microservice for RentRide
-    version: 0.0.1-SNAPSHOT
-
-# â”€â”€ Logging Configuration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-logging:
-  level:
-    com.rentride.vehicleservice: DEBUG
-    org.springframework.web: INFO
-    org.hibernate.SQL: DEBUG
