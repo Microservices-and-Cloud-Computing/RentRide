@@ -1,0 +1,58 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: booking-service
+
+  # -- DataSource (HikariCP & PostgreSQL) ------------------------------------
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/rentride_booking_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000          # 5 minutes
+      connection-timeout: 20000     # 20 seconds
+      max-lifetime: 1800000         # 30 minutes
+      pool-name: BookingServiceHikariPool
+      initialization-fail-timeout: 1
+
+  # -- JPA / Hibernate ------------------------------------------------------
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    open-in-view: false             # Disable OSIV to prevent anti-patterns
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+# -- Eureka Client Configuration ---------------------------------------------
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE:http://localhost:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.uuid}
+
+# -- Actuator Management Endpoints -------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+  endpoint:
+    health:
+      show-details: always
+  info:
+    env:
+      enabled: true
+
