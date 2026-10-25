@@ -1,0 +1,785 @@
+{
+  "info": {
+    "_postman_id": "c2100000-booking-service-openfeign-rentride",
+    "name": "RentRide - Booking Service OpenFeign Client (Commit 21)",
+    "description": "Postman collection to test and verify Commit 21: Spring Cloud OpenFeign client inter-service communication between Booking Microservice (port 8083) and Vehicle Microservice (port 8082) via Eureka dynamic discovery (port 8761) and API Gateway (port 8085). Includes tests for RPC queries, PATCH status updates, CustomFeignErrorDecoder 404/503 handling, Actuator health, and Gateway security filters.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "booking_service_url",
+      "value": "http://localhost:8083",
+      "type": "string"
+    },
+    {
+      "key": "vehicle_service_url",
+      "value": "http://localhost:8082",
+      "type": "string"
+    },
+    {
+      "key": "gateway_url",
+      "value": "http://localhost:8085",
+      "type": "string"
+    },
+    {
+      "key": "eureka_url",
+      "value": "http://localhost:8761",
+      "type": "string"
+    },
+    {
+      "key": "vehicle_id",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Discovery & Service Health",
+      "item": [
+        {
+          "name": "1.1 Eureka Registry - Query Registered Instances",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Eureka catalog contains BOOKING-SERVICE and VEHICLE-SERVICE\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    var apps = jsonData.applications.application;",
+                  "    pm.expect(apps).to.be.an(\"array\");",
+                  "",
+                  "    var appNames = apps.map(function(app) { return app.name; });",
+                  "    pm.expect(appNames).to.include(\"BOOKING-SERVICE\");",
+                  "    pm.expect(appNames).to.include(\"VEHICLE-SERVICE\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{eureka_url}}/eureka/apps",
+              "host": [
+                "{{eureka_url}}"
+              ],
+              "path": [
+                "eureka",
+                "apps"
+              ]
+            },
+            "description": "Queries Eureka Discovery Server to verify that both BOOKING-SERVICE and VEHICLE-SERVICE are dynamically registered."
+          },
+          "response": []
+        },
+        {
+          "name": "1.2 Booking Service Direct Status (Port 8083)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Verify booking-service identity & port\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"UP\");",
+                  "    pm.expect(jsonData.service).to.eql(\"booking-service\");",
+                  "    pm.expect(jsonData.port).to.eql(8083);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings/status",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "status"
+              ]
+            },
+            "description": "Direct health ping to booking-service on port 8083."
+          },
+          "response": []
+        },
+        {
+          "name": "1.3 Booking Service Actuator Health & Components",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Service status is UP\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"UP\");",
+                  "});",
+                  "",
+                  "pm.test(\"Database and Discovery components are UP\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.components.db.status).to.eql(\"UP\");",
+                  "    pm.expect(jsonData.components.discoveryComposite.status).to.eql(\"UP\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/actuator/health",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            },
+            "description": "Verifies JPA database pool and Eureka client discovery composite status via Actuator."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. OpenFeign Inter-Service RPC (Port 8083 -> Port 8082)",
+      "item": [
+        {
+          "name": "2.1 Feign RPC: Get Vehicle Specifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Vehicle details returned via Feign RPC\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.id).to.eql(Number(pm.variables.get(\"vehicle_id\")));",
+                  "    pm.expect(jsonData.make).to.be.a(\"string\");",
+                  "    pm.expect(jsonData.model).to.be.a(\"string\");",
+                  "    pm.expect(jsonData.dailyRentalRate).to.be.a(\"number\");",
+                  "    pm.expect(jsonData.status).to.be.a(\"string\");",
+                  "    pm.expect(jsonData.providerId).to.be.a(\"number\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings/test/vehicle/{{vehicle_id}}",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "test",
+                "vehicle",
+                "{{vehicle_id}}"
+              ]
+            },
+            "description": "Calls booking-service test endpoint, which executes an OpenFeign RPC call to vehicle-service via Eureka load balancer: GET /api/v1/vehicles/{id}."
+          },
+          "response": []
+        },
+        {
+          "name": "2.2 Feign RPC: Check Vehicle Availability",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Vehicle availability DTO returned via Feign RPC\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.vehicleId).to.eql(Number(pm.variables.get(\"vehicle_id\")));",
+                  "    pm.expect(jsonData.status).to.be.a(\"string\");",
+                  "    pm.expect(jsonData.dailyRentalRate).to.be.a(\"number\");",
+                  "    pm.expect(jsonData.isAvailable).to.be.a(\"boolean\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings/test/vehicle/{{vehicle_id}}/availability",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "test",
+                "vehicle",
+                "{{vehicle_id}}",
+                "availability"
+              ]
+            },
+            "description": "Calls booking-service test endpoint, which executes OpenFeign RPC call: GET /api/v1/vehicles/{id}/availability."
+          },
+          "response": []
+        },
+        {
+          "name": "2.3 Feign RPC: Update Vehicle Status to RENTED (PATCH)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Status successfully updated to RENTED\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.id).to.eql(Number(pm.variables.get(\"vehicle_id\")));",
+                  "    pm.expect(jsonData.status).to.eql(\"RENTED\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"RENTED\",\n  \"reason\": \"Booking reservation lock via Postman\"\n}"
+            },
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings/test/vehicle/{{vehicle_id}}/status",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "test",
+                "vehicle",
+                "{{vehicle_id}}",
+                "status"
+              ]
+            },
+            "description": "Executes HTTP PATCH through Feign Client to vehicle-service, locking the vehicle into RENTED status."
+          },
+          "response": []
+        },
+        {
+          "name": "2.4 Feign RPC: Verify Vehicle isAvailable evaluates to False",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Vehicle is now marked unavailable\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"RENTED\");",
+                  "    pm.expect(jsonData.isAvailable).to.eql(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings/test/vehicle/{{vehicle_id}}/availability",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "test",
+                "vehicle",
+                "{{vehicle_id}}",
+                "availability"
+              ]
+            },
+            "description": "Verifies that booking-service's checkAvailability RPC reflects the updated RENTED state and isAvailable=false."
+          },
+          "response": []
+        },
+        {
+          "name": "2.5 Feign RPC: Restore Vehicle Status to AVAILABLE (PATCH)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Status successfully restored to AVAILABLE\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.id).to.eql(Number(pm.variables.get(\"vehicle_id\")));",
+                  "    pm.expect(jsonData.status).to.eql(\"AVAILABLE\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"AVAILABLE\",\n  \"reason\": \"Postman verification test complete\"\n}"
+            },
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings/test/vehicle/{{vehicle_id}}/status",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "test",
+                "vehicle",
+                "{{vehicle_id}}",
+                "status"
+              ]
+            },
+            "description": "Restores vehicle to AVAILABLE status via Feign PATCH RPC."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Feign Error Decoding & Resilience",
+      "item": [
+        {
+          "name": "3.1 Custom Error Decoder: Vehicle Not Found (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404 Not Found\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test(\"CustomFeignErrorDecoder correctly propagated 404 VehicleNotFoundException\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(404);",
+                  "    pm.expect(jsonData.error).to.eql(\"Not Found\");",
+                  "    pm.expect(jsonData.message).to.include(\"Vehicle not found with ID: 999\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings/test/vehicle/999",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "test",
+                "vehicle",
+                "999"
+              ]
+            },
+            "description": "Queries a non-existent vehicle ID (999). CustomFeignErrorDecoder intercepts upstream 404 and throws VehicleNotFoundException, mapped to 404 by GlobalExceptionHandler."
+          },
+          "response": []
+        },
+        {
+          "name": "3.2 Custom Error Decoder: Availability Check for Non-Existent Vehicle (404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404 Not Found\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test(\"Error response contains structured details\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(404);",
+                  "    pm.expect(jsonData.error).to.eql(\"Not Found\");",
+                  "    pm.expect(jsonData.message).to.include(\"Vehicle not found with ID: 999\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings/test/vehicle/999/availability",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "test",
+                "vehicle",
+                "999",
+                "availability"
+              ]
+            },
+            "description": "Checks availability for non-existent vehicle ID 999 to test error decoding on checkAvailability endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "3.3 Upstream Comparison: Vehicle Service Direct 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404 Not Found\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{vehicle_service_url}}/api/v1/vehicles/999",
+              "host": [
+                "{{vehicle_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vehicles",
+                "999"
+              ]
+            },
+            "description": "Direct call to vehicle-service on port 8082 to verify upstream 404 matches the decoded Feign error."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Upstream Direct Verification (Port 8082)",
+      "item": [
+        {
+          "name": "4.1 Direct Vehicle Service - Get Vehicle 1",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Vehicle details match Feign response\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.id).to.eql(1);",
+                  "    pm.expect(jsonData.make).to.eql(\"Toyota\");",
+                  "    pm.expect(jsonData.model).to.eql(\"Aqua\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{vehicle_service_url}}/api/v1/vehicles/1",
+              "host": [
+                "{{vehicle_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vehicles",
+                "1"
+              ]
+            },
+            "description": "Direct request to vehicle-service to compare data returned directly vs through OpenFeign client."
+          },
+          "response": []
+        },
+        {
+          "name": "4.2 Direct Vehicle Service - Check Availability",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Vehicle 1 availability is true\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.vehicleId).to.eql(1);",
+                  "    pm.expect(jsonData.isAvailable).to.eql(true);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{vehicle_service_url}}/api/v1/vehicles/1/availability",
+              "host": [
+                "{{vehicle_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vehicles",
+                "1",
+                "availability"
+              ]
+            },
+            "description": "Direct availability check on vehicle-service."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. API Gateway Routing & Security (Port 8085)",
+      "item": [
+        {
+          "name": "5.1 Gateway Routing - Whitelisted Status Endpoint",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Gateway routed successfully to booking-service\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.service).to.eql(\"booking-service\");",
+                  "    pm.expect(jsonData.status).to.eql(\"UP\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/bookings/status",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "status"
+              ]
+            },
+            "description": "Tests public whitelisted status route through API Gateway without authentication."
+          },
+          "response": []
+        },
+        {
+          "name": "5.2 Gateway Security - Unauthenticated Feign Endpoint (Expects 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test(\"Gateway authentication filter rejected unauthenticated request\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(401);",
+                  "    pm.expect(jsonData.error).to.eql(\"Unauthorized\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/bookings/test/vehicle/1",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "test",
+                "vehicle",
+                "1"
+              ]
+            },
+            "description": "Verifies that API Gateway requires JWT authentication on protected /api/v1/bookings/** endpoints."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
+
