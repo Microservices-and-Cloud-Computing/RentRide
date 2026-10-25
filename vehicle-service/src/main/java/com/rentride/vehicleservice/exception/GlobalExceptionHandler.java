@@ -94,6 +94,27 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handles invalid or illegal vehicle operational status transitions (HTTP 409 Conflict).
+     */
+    @ExceptionHandler(InvalidStateTransitionException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidStateTransitionException(
+            InvalidStateTransitionException ex,
+            HttpServletRequest request) {
+
+        log.warn("Invalid vehicle state transition on path '{}': {}", request.getRequestURI(), ex.getMessage());
+
+        ErrorResponse response = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.CONFLICT.value())
+                .error(HttpStatus.CONFLICT.getReasonPhrase())
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(response);
+    }
+
+    /**
      * Handles unauthorized access and resource ownership violations (HTTP 403).
      */
     @ExceptionHandler(UnauthorizedAccessException.class)

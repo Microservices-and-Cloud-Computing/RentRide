@@ -1,5 +1,6 @@
 package com.rentride.vehicleservice.entity;
 
+import com.rentride.vehicleservice.exception.InvalidStateTransitionException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -126,4 +127,60 @@ public class Vehicle extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", nullable = false, foreignKey = @ForeignKey(name = "fk_vehicles_category_id"))
     private Category category;
+
+    // ── Domain Logic & Lifecycle Transitions ─────────────────────────────────
+
+    /**
+     * Validates and applies an operational status transition according to RentRide lifecycle rules.
+     *
+     * <p>Permissible state transitions:
+     * <ul>
+     *   <li>{@link VehicleStatus#AVAILABLE} &rarr; {@link VehicleStatus#RENTED} (booking confirmed/locked)</li>
+     *   <li>{@link VehicleStatus#RENTED} &rarr; {@link VehicleStatus#AVAILABLE} (vehicle returned in good condition)</li>
+     *   <li>{@link VehicleStatus#RENTED} &rarr; {@link VehicleStatus#MAINTENANCE} (vehicle returned needing repair/servicing)</li>
+     *   <li>{@link VehicleStatus#MAINTENANCE} &rarr; {@link VehicleStatus#AVAILABLE} (servicing completed and inspection cleared)</li>
+     * </ul>
+     *
+     * @param targetStatus the desired target VehicleStatus
+     * @throws InvalidStateTransitionException if the status transition is not permitted
+     */
+    public void transitionTo(VehicleStatus targetStatus) {
+        if (targetStatus == null) {
+            throw new InvalidStateTransitionException("Target vehicle status cannot be null");
+        }
+        if (!isValidTransition(this.status, targetStatus)) {
+            throw new InvalidStateTransitionException(
+                    String.format("Vehicle cannot transition from %s to %s", this.status, targetStatus)
+            );
+        }
+        this.status = targetStatus;
+    }
+
+    /**
+     * Determines whether transitioning from the {@code current} status to the {@code target} status is valid.
+     *
+     * @param current current vehicle status
+     * @param target target vehicle status
+     * @return true if the transition is allowed by business rules, false otherwise
+     */
+    public static boolean isValidTransition(VehicleStatus current, VehicleStatus target) {
+        if (current == null || target == null || current == target) {
+            return false;
+        }
+        return switch (current) {
+            case AVAILABLE -> target == VehicleStatus.RENTED;
+            case RENTED -> target == VehicleStatus.AVAILABLE || target == VehicleStatus.MAINTENANCE;
+            case MAINTENANCE -> target == VehicleStatus.AVAILABLE;
+            case DECOMMISSIONED -> false;
+        };
+    }
+
+    /**
+     * Evaluates whether this vehicle is currently ready and eligible for customer booking dispatch.
+     *
+     * @return true if the current status is AVAILABLE, false otherwise
+     */
+    public boolean isAvailableForBooking() {
+        return this.status == VehicleStatus.AVAILABLE;
+    }
 }

@@ -5,7 +5,7 @@ spring:
   application:
     name: vehicle-service
 
-  # ── DataSource (HikariCP & PostgreSQL) ────────────────────────────────────
+  # -- DataSource (HikariCP & PostgreSQL) ------------------------------------
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/rentride_vehicle_db}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
@@ -21,7 +21,7 @@ spring:
       # Fail-fast on startup if the database is unreachable
       initialization-fail-timeout: 1
 
-  # ── JPA / Hibernate ──────────────────────────────────────────────────────
+  # -- JPA / Hibernate ------------------------------------------------------
   jpa:
     hibernate:
       ddl-auto: update
@@ -30,11 +30,10 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
         jdbc:
           time_zone: UTC
 
-# ── Eureka Client Configuration ─────────────────────────────────────────────
+# -- Eureka Client Configuration ---------------------------------------------
 eureka:
   client:
     service-url:
@@ -45,7 +44,7 @@ eureka:
     prefer-ip-address: true
     instance-id: ${spring.application.name}:${random.uuid}
 
-# ── Actuator Management Endpoints ───────────────────────────────────────────
+# -- Actuator Management Endpoints -------------------------------------------
 management:
   endpoints:
     web:
@@ -57,17 +56,3 @@ management:
   info:
     env:
       enabled: true
-
-# ── Application Metadata (surfaced via /actuator/info) ───────────────────────
-info:
-  app:
-    name: ${spring.application.name}
-    description: Vehicle & Catalog Management Microservice for RentRide
-    version: 0.0.1-SNAPSHOT
-
-# ── Logging Configuration ───────────────────────────────────────────────────
-logging:
-  level:
-    com.rentride.vehicleservice: DEBUG
-    org.springframework.web: INFO
-    org.hibernate.SQL: DEBUG

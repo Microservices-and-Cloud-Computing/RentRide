@@ -1,14 +1,12 @@
 package com.rentride.vehicleservice.service.impl;
 
 import com.rentride.vehicleservice.dto.PaginatedResponse;
+import com.rentride.vehicleservice.dto.VehicleAvailabilityResponse;
 import com.rentride.vehicleservice.dto.VehicleCreateRequest;
 import com.rentride.vehicleservice.dto.VehicleResponse;
 import com.rentride.vehicleservice.dto.VehicleSearchCriteria;
+import com.rentride.vehicleservice.dto.VehicleStatusUpdateRequest;
 import com.rentride.vehicleservice.dto.VehicleUpdateRequest;
-import com.rentride.vehicleservice.specification.VehicleSpecification;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
 import com.rentride.vehicleservice.entity.Category;
 import com.rentride.vehicleservice.entity.Vehicle;
 import com.rentride.vehicleservice.entity.VehicleStatus;
@@ -18,8 +16,12 @@ import com.rentride.vehicleservice.exception.UnauthorizedAccessException;
 import com.rentride.vehicleservice.repository.CategoryRepository;
 import com.rentride.vehicleservice.repository.VehicleRepository;
 import com.rentride.vehicleservice.service.VehicleService;
+import com.rentride.vehicleservice.specification.VehicleSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,7 +29,8 @@ import java.util.List;
 
 /**
  * Implementation of {@link VehicleService} providing business operations for
- * vehicle onboarding, provider ownership enforcement, inventory queries, and availability management.
+ * vehicle onboarding, provider ownership enforcement, inventory queries,
+ * concurrency-controlled status transitions, and availability management.
  */
 @Service
 @RequiredArgsConstructor
@@ -153,6 +156,40 @@ public class VehicleServiceImpl implements VehicleService {
         Page<Vehicle> vehiclePage = vehicleRepository.findAll(spec, pageable);
 
         return PaginatedResponse.fromPage(vehiclePage, this::mapToResponse);
+    }
+
+    @Override
+    public VehicleResponse updateVehicleStatus(Long vehicleId, VehicleStatusUpdateRequest request) {
+        log.info("Initiating vehicle status update: vehicleId={}, targetStatus={}, reason='{}'",
+                vehicleId, request.getStatus(), request.getReason());
+
+        Vehicle vehicle = vehicleRepository.findByIdWithPessimisticLock(vehicleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found with id: " + vehicleId));
+
+        VehicleStatus oldStatus = vehicle.getStatus();
+        vehicle.transitionTo(request.getStatus());
+
+        Vehicle updatedVehicle = vehicleRepository.save(vehicle);
+        log.info("Atomic vehicle status mutation completed: vehicleId={}, previousStatus={}, newStatus={}, reason='{}'",
+                vehicleId, oldStatus, updatedVehicle.getStatus(), request.getReason());
+
+        return mapToResponse(updatedVehicle);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public VehicleAvailabilityResponse checkVehicleAvailability(Long vehicleId) {
+        log.debug("Executing lightweight availability lookup for vehicleId={}", vehicleId);
+
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vehicle not found with id: " + vehicleId));
+
+        return VehicleAvailabilityResponse.builder()
+                .vehicleId(vehicle.getId())
+                .status(vehicle.getStatus())
+                .isAvailable(vehicle.isAvailableForBooking())
+                .dailyRentalRate(vehicle.getDailyRentalRate())
+                .build();
     }
 
     private VehicleResponse mapToResponse(Vehicle vehicle) {

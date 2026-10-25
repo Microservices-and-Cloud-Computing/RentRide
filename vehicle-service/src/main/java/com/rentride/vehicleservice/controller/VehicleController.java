@@ -1,9 +1,11 @@
 package com.rentride.vehicleservice.controller;
 
 import com.rentride.vehicleservice.dto.PaginatedResponse;
+import com.rentride.vehicleservice.dto.VehicleAvailabilityResponse;
 import com.rentride.vehicleservice.dto.VehicleCreateRequest;
 import com.rentride.vehicleservice.dto.VehicleResponse;
 import com.rentride.vehicleservice.dto.VehicleSearchCriteria;
+import com.rentride.vehicleservice.dto.VehicleStatusUpdateRequest;
 import com.rentride.vehicleservice.dto.VehicleUpdateRequest;
 import com.rentride.vehicleservice.entity.FuelType;
 import com.rentride.vehicleservice.entity.TransmissionType;
@@ -18,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -33,10 +36,11 @@ import java.util.Set;
 
 /**
  * REST controller exposing endpoints for vehicle inventory CRUD operations,
- * public vehicle catalog lookups, and rental provider fleet management.
+ * public vehicle catalog lookups, rental provider fleet management,
+ * and internal lifecycle status synchronization.
  *
  * <p>Extracts caller identity context (such as {@code X-User-Id} and {@code X-User-Role})
- * forwarded from the API Gateway authentication filter.
+ * forwarded from the API Gateway authentication filter for provider operations.
  */
 @RestController
 @RequestMapping("/api/v1/vehicles")
@@ -202,5 +206,43 @@ public class VehicleController {
 
         vehicleService.deleteVehicle(id, providerId);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Updates an existing vehicle's operational status.
+     * Internal endpoint used by Booking Service to atomically transition vehicle status
+     * (AVAILABLE -> RENTED, RENTED -> AVAILABLE, RENTED -> MAINTENANCE, MAINTENANCE -> AVAILABLE)
+     * during reservation lifecycle events.
+     *
+     * @param id vehicle ID
+     * @param request status update payload
+     * @return 200 OK with updated VehicleResponse
+     */
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<VehicleResponse> updateVehicleStatus(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody VehicleStatusUpdateRequest request) {
+
+        log.info("REST PATCH /api/v1/vehicles/{}/status: newStatus={}, reason='{}'",
+                id, request.getStatus(), request.getReason());
+
+        VehicleResponse response = vehicleService.updateVehicleStatus(id, request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Lightweight query endpoint to verify vehicle existence, current status, and rental eligibility.
+     *
+     * @param id vehicle ID
+     * @return 200 OK with VehicleAvailabilityResponse
+     */
+    @GetMapping("/{id}/availability")
+    public ResponseEntity<VehicleAvailabilityResponse> checkVehicleAvailability(
+            @PathVariable("id") Long id) {
+
+        log.info("REST GET /api/v1/vehicles/{}/availability", id);
+
+        VehicleAvailabilityResponse response = vehicleService.checkVehicleAvailability(id);
+        return ResponseEntity.ok(response);
     }
 }

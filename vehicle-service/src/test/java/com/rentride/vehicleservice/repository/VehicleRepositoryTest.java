@@ -422,4 +422,32 @@ class VehicleRepositoryTest {
         assertThat(vehicleRepository.existsByLicensePlateNumber("EXISTS-PLATE-1")).isTrue();
         assertThat(vehicleRepository.existsByLicensePlateNumber("NON-EXISTENT-PLATE")).isFalse();
     }
+
+    @Test
+    @DisplayName("testFindByIdWithPessimisticLock: Retrieves vehicle with pessimistic write lock")
+    void testFindByIdWithPessimisticLock() {
+        Vehicle vehicle = Vehicle.builder()
+                .providerId(600L)
+                .make("Toyota")
+                .model("Camry")
+                .manufacturingYear(2023)
+                .licensePlateNumber("LOCK-PLATE-1")
+                .seatingCapacity(5)
+                .fuelType(FuelType.HYBRID)
+                .transmission(TransmissionType.AUTOMATIC)
+                .dailyRentalRate(new BigDecimal("95.00"))
+                .status(VehicleStatus.AVAILABLE)
+                .location("Colombo")
+                .category(sedanCategory)
+                .build();
+
+        Vehicle saved = vehicleRepository.saveAndFlush(vehicle);
+        entityManager.clear();
+
+        Optional<Vehicle> lockedVehicle = vehicleRepository.findByIdWithPessimisticLock(saved.getId());
+
+        assertThat(lockedVehicle).isPresent();
+        assertThat(lockedVehicle.get().getLicensePlateNumber()).isEqualTo("LOCK-PLATE-1");
+        assertThat(lockedVehicle.get().getStatus()).isEqualTo(VehicleStatus.AVAILABLE);
+    }
 }

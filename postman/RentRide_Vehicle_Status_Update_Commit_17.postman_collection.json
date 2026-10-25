@@ -1,0 +1,436 @@
+{
+	"info": {
+		"_postman_id": "c17e4f21-8b3d-4c92-a1b7-9e45d8f2a017",
+		"name": "RentRide - Vehicle Status & Availability (Commit 17)",
+		"description": "Comprehensive Postman test collection for testing Commit 17 internal vehicle status transition endpoints, concurrency conflict handling (HTTP 409), and lightweight availability queries.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "0. Setup - Seed Vehicle 1 (if not present)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Vehicle exists or created successfully\", function () {",
+							"    pm.expect([200, 201, 409]).to.include(pm.response.code);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "X-User-Id",
+						"value": "10"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"make\": \"Toyota\",\n  \"model\": \"Camry\",\n  \"manufacturingYear\": 2023,\n  \"licensePlateNumber\": \"WP-CAB-1001\",\n  \"categoryId\": 1,\n  \"seatingCapacity\": 5,\n  \"fuelType\": \"PETROL\",\n  \"transmission\": \"AUTOMATIC\",\n  \"dailyRentalRate\": 95.00,\n  \"location\": \"Colombo\"\n}"
+				},
+				"url": {
+					"raw": "http://localhost:8082/api/v1/vehicles",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8082",
+					"path": [
+						"api",
+						"v1",
+						"vehicles"
+					]
+				},
+				"description": "Registers vehicle with ID 1 so subsequent test requests always pass on any fresh database environment."
+			},
+			"response": []
+		},
+		{
+			"name": "1. Check Initial Vehicle Availability",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Verify vehicle is available for rental\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.vehicleId).to.eql(1);",
+							"    pm.expect(jsonData.status).to.eql(\"AVAILABLE\");",
+							"    pm.expect(jsonData.isAvailable).to.eql(true);",
+							"    pm.expect(jsonData.dailyRentalRate).to.eql(95.00);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8082/api/v1/vehicles/1/availability",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8082",
+					"path": [
+						"api",
+						"v1",
+						"vehicles",
+						"1",
+						"availability"
+					]
+				},
+				"description": "Lightweight query returning vehicle status and pricing for booking eligibility pre-checks."
+			},
+			"response": []
+		},
+		{
+			"name": "2. Transition Status to RENTED (Booking Pickup)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Vehicle status transitioned to RENTED\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.id).to.eql(1);",
+							"    pm.expect(jsonData.status).to.eql(\"RENTED\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"status\": \"RENTED\",\n  \"reason\": \"Booking #501 active\"\n}"
+				},
+				"url": {
+					"raw": "http://localhost:8082/api/v1/vehicles/1/status",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8082",
+					"path": [
+						"api",
+						"v1",
+						"vehicles",
+						"1",
+						"status"
+					]
+				},
+				"description": "Used by Booking Service during reservation dispatch to atomically lock vehicle status to RENTED."
+			},
+			"response": []
+		},
+		{
+			"name": "3. Re-check Availability After Rental",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Verify vehicle is no longer available\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.vehicleId).to.eql(1);",
+							"    pm.expect(jsonData.status).to.eql(\"RENTED\");",
+							"    pm.expect(jsonData.isAvailable).to.eql(false);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8082/api/v1/vehicles/1/availability",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8082",
+					"path": [
+						"api",
+						"v1",
+						"vehicles",
+						"1",
+						"availability"
+					]
+				},
+				"description": "Verifies that checkVehicleAvailability reflects the updated RENTED status and returns isAvailable: false."
+			},
+			"response": []
+		},
+		{
+			"name": "4. Reject Invalid Transition - 409 Conflict (RENTED to RENTED)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 409 Conflict\", function () {",
+							"    pm.response.to.have.status(409);",
+							"});",
+							"",
+							"pm.test(\"Verify conflict rejection message\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql(409);",
+							"    pm.expect(jsonData.error).to.eql(\"Conflict\");",
+							"    pm.expect(jsonData.message).to.eql(\"Vehicle cannot transition from RENTED to RENTED\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"status\": \"RENTED\",\n  \"reason\": \"Duplicate booking attempt\"\n}"
+				},
+				"url": {
+					"raw": "http://localhost:8082/api/v1/vehicles/1/status",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8082",
+					"path": [
+						"api",
+						"v1",
+						"vehicles",
+						"1",
+						"status"
+					]
+				},
+				"description": "Validates state machine integrity. Rejecting re-renting prevents double-booking race conditions."
+			},
+			"response": []
+		},
+		{
+			"name": "5. Transition Status to MAINTENANCE (Damaged Return)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Vehicle status transitioned to MAINTENANCE\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.id).to.eql(1);",
+							"    pm.expect(jsonData.status).to.eql(\"MAINTENANCE\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"status\": \"MAINTENANCE\",\n  \"reason\": \"Brake pad replacement\"\n}"
+				},
+				"url": {
+					"raw": "http://localhost:8082/api/v1/vehicles/1/status",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8082",
+					"path": [
+						"api",
+						"v1",
+						"vehicles",
+						"1",
+						"status"
+					]
+				},
+				"description": "Simulates Scenario 04 return inspection requiring vehicle servicing before re-dispatch."
+			},
+			"response": []
+		},
+		{
+			"name": "6. Release Status to AVAILABLE (Servicing Cleared)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Vehicle status released to AVAILABLE\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.id).to.eql(1);",
+							"    pm.expect(jsonData.status).to.eql(\"AVAILABLE\");",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "PATCH",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"status\": \"AVAILABLE\",\n  \"reason\": \"Maintenance completed\"\n}"
+				},
+				"url": {
+					"raw": "http://localhost:8082/api/v1/vehicles/1/status",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8082",
+					"path": [
+						"api",
+						"v1",
+						"vehicles",
+						"1",
+						"status"
+					]
+				},
+				"description": "Returns vehicle to active catalog upon mechanical inspection clearance."
+			},
+			"response": []
+		},
+		{
+			"name": "7. Final Availability Check",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Vehicle is once again available for booking\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.vehicleId).to.eql(1);",
+							"    pm.expect(jsonData.status).to.eql(\"AVAILABLE\");",
+							"    pm.expect(jsonData.isAvailable).to.eql(true);",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "http://localhost:8082/api/v1/vehicles/1/availability",
+					"protocol": "http",
+					"host": [
+						"localhost"
+					],
+					"port": "8082",
+					"path": [
+						"api",
+						"v1",
+						"vehicles",
+						"1",
+						"availability"
+					]
+				},
+				"description": "Verifies vehicle has completed the full lifecycle loop and is ready for fresh customer reservations."
+			},
+			"response": []
+		}
+	]
+}
+
