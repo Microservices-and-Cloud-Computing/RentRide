@@ -33,6 +33,15 @@ spring:
         jdbc:
           time_zone: UTC
 
+# -- SpringDoc OpenAPI 3 / Swagger UI ---------------------------------------
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+
 # -- Eureka Client Configuration ---------------------------------------------
 eureka:
   client:
