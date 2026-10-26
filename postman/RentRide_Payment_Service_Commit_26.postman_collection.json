@@ -1,0 +1,413 @@
+{
+  "info": {
+    "_postman_id": "commit26-payment-service-entity-repository-rentride",
+    "name": "RentRide - Commit 26: Payment Entity, Enums & JPA Repository Layer",
+    "description": "Postman integration collection for verifying Commit 26 deliverables: Payment Microservice health, PostgreSQL database connection pool, HikariCP metrics for repository persistence, Eureka service discovery registration, and API Gateway load-balanced routing.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "paymentServiceUrl",
+      "value": "http://localhost:8084",
+      "type": "string",
+      "description": "Direct Payment Microservice URL on native port 8084"
+    },
+    {
+      "key": "gatewayUrl",
+      "value": "http://localhost:8085",
+      "type": "string",
+      "description": "RentRide Spring Cloud API Gateway URL (defaults to 8085; change to 8080 if running gateway without port override)"
+    },
+    {
+      "key": "eurekaUrl",
+      "value": "http://localhost:8761",
+      "type": "string",
+      "description": "Netflix Eureka Discovery Server URL on port 8761"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Direct Payment Service Status (Port 8084)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Verify payment-service identity and port\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(\"UP\");",
+              "    pm.expect(jsonData.service).to.eql(\"payment-service\");",
+              "    pm.expect(jsonData.port).to.eql(8084);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{paymentServiceUrl}}/api/v1/payments/status",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "status"
+          ]
+        },
+        "description": "Tests direct liveness and identity of payment-service on native port 8084."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Database Connection & HikariCP Pool Health (Port 8084)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Overall application status is UP\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(\"UP\");",
+              "});",
+              "",
+              "pm.test(\"PostgreSQL database connection pool is UP\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.components).to.be.an(\"object\");",
+              "    pm.expect(jsonData.components.db).to.be.an(\"object\");",
+              "    pm.expect(jsonData.components.db.status).to.eql(\"UP\");",
+              "    pm.expect(jsonData.components.db.details.database).to.eql(\"PostgreSQL\");",
+              "});",
+              "",
+              "pm.test(\"Eureka service discovery component is UP\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.components.discoveryComposite).to.be.an(\"object\");",
+              "    pm.expect(jsonData.components.discoveryComposite.status).to.eql(\"UP\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{paymentServiceUrl}}/actuator/health",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        },
+        "description": "Validates Spring Boot Actuator health, verifying active PostgreSQL database connectivity for Payment repository persistence."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Actuator Metrics - HikariCP Total Connections (Port 8084)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"HikariCP connection pool metrics exist for payment repository\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.name).to.eql(\"hikaricp.connections\");",
+              "    pm.expect(jsonData.measurements).to.be.an(\"array\").that.is.not.empty;",
+              "    pm.expect(jsonData.measurements[0].value).to.be.at.least(1);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{paymentServiceUrl}}/actuator/metrics/hikaricp.connections",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "metrics",
+            "hikaricp.connections"
+          ]
+        },
+        "description": "Inspects HikariCP connection pool metrics verifying the active database pool serving the payments table."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Actuator Metrics - HikariCP Idle Connections (Port 8084)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"HikariCP idle connections metric exists\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.name).to.eql(\"hikaricp.connections.idle\");",
+              "    pm.expect(jsonData.measurements).to.be.an(\"array\").that.is.not.empty;",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{paymentServiceUrl}}/actuator/metrics/hikaricp.connections.idle",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "metrics",
+            "hikaricp.connections.idle"
+          ]
+        },
+        "description": "Monitors idle database connections waiting in the Hikari pool for payment transactions."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Actuator Metrics - HikariCP Max Pool Size (Port 8084)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"HikariCP max connection capacity is configured\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.name).to.eql(\"hikaricp.connections.max\");",
+              "    pm.expect(jsonData.measurements[0].value).to.be.above(0);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{paymentServiceUrl}}/actuator/metrics/hikaricp.connections.max",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "metrics",
+            "hikaricp.connections.max"
+          ]
+        },
+        "description": "Verifies the maximum database connection pool size configured for the payment repository layer."
+      },
+      "response": []
+    },
+    {
+      "name": "6. Gateway Routed Payment Status (Port 8085 / 8080)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Gateway forwards request with 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Gateway load-balanced to payment-service successfully\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(\"UP\");",
+              "    pm.expect(jsonData.service).to.eql(\"payment-service\");",
+              "    pm.expect(jsonData.port).to.eql(8084);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/v1/payments/status",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "status"
+          ]
+        },
+        "description": "Tests reverse proxy routing and load balancing through Spring Cloud Gateway to PAYMENT-SERVICE via Eureka."
+      },
+      "response": []
+    },
+    {
+      "name": "7. Eureka Registry - PAYMENT-SERVICE Instance Query (Port 8761)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Eureka responds with 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"PAYMENT-SERVICE is registered with instance UP\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.application.name).to.eql(\"PAYMENT-SERVICE\");",
+              "    var instances = jsonData.application.instance;",
+              "    pm.expect(instances).to.be.an(\"array\").that.is.not.empty;",
+              "    pm.expect(instances[0].status).to.eql(\"UP\");",
+              "    pm.expect(instances[0].port[\"$\"]).to.eql(8084);",
+              "    pm.expect(instances[0].vipAddress).to.eql(\"payment-service\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{eurekaUrl}}/eureka/apps/PAYMENT-SERVICE",
+          "host": [
+            "{{eurekaUrl}}"
+          ],
+          "path": [
+            "eureka",
+            "apps",
+            "PAYMENT-SERVICE"
+          ]
+        },
+        "description": "Directly queries Eureka Discovery Server to verify PAYMENT-SERVICE instance heartbeat, status UP, and port 8084."
+      },
+      "response": []
+    },
+    {
+      "name": "8. Gateway Security - Unauthenticated Payment Route (Sanity Check)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Gateway rejects unauthenticated payment route with 401 Unauthorized\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Verify error response payload\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(401);",
+              "    pm.expect(jsonData.error).to.eql(\"Unauthorized\");",
+              "    pm.expect(jsonData.message).to.include(\"authorization token\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": 50,\n  \"amount\": 10000.00,\n  \"currency\": \"LKR\",\n  \"paymentMethod\": \"CREDIT_CARD\"\n}"
+        },
+        "url": {
+          "raw": "{{gatewayUrl}}/api/v1/payments",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments"
+          ]
+        },
+        "description": "Sanity check verifying that non-whitelisted payment business endpoints require JWT authorization through the API Gateway."
+      },
+      "response": []
+    }
+  ]
+}
+
