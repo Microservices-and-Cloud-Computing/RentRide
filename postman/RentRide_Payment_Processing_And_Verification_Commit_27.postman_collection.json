@@ -1,0 +1,728 @@
+{
+  "info": {
+    "_postman_id": "commit27-payment-processing-verification-rentride",
+    "name": "RentRide - Commit 27: Payment Processing, Gateway Simulation & Verification",
+    "description": "Postman test suite for verifying Commit 27 deliverables: Payment Processing (Business Scenario 02), Payment Gateway Simulator (Approved, Declined, Timeout), Idempotency conflict enforcement, Public transaction verification (Direct & API Gateway whitelisted route), and Input Validation edge cases.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "paymentServiceUrl",
+      "value": "http://localhost:8084",
+      "type": "string",
+      "description": "Direct Payment Microservice URL on native port 8084"
+    },
+    {
+      "key": "gatewayUrl",
+      "value": "http://localhost:8085",
+      "type": "string",
+      "description": "RentRide Spring Cloud API Gateway URL (defaults to 8085; change to 8080 if running gateway without port override)"
+    },
+    {
+      "key": "customerId",
+      "value": "10",
+      "type": "string",
+      "description": "Simulated authenticated user ID injected via X-User-Id header"
+    },
+    {
+      "key": "bookingIdSuccess",
+      "value": "101",
+      "type": "string",
+      "description": "Booking ID used for approved transaction test"
+    },
+    {
+      "key": "bookingIdDeclined",
+      "value": "102",
+      "type": "string",
+      "description": "Booking ID used for simulated card decline test"
+    },
+    {
+      "key": "bookingIdTimeout",
+      "value": "103",
+      "type": "string",
+      "description": "Booking ID used for simulated gateway timeout test"
+    },
+    {
+      "key": "lastTransactionReference",
+      "value": "TXN-RR-20261026-3N9U5R",
+      "type": "string",
+      "description": "Dynamically updated transaction reference from successful checkout"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Direct Payment Service Status (Port 8084)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Verify payment-service identity and port\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(\"UP\");",
+              "    pm.expect(jsonData.service).to.eql(\"payment-service\");",
+              "    pm.expect(jsonData.port).to.eql(8084);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{paymentServiceUrl}}/api/v1/payments/status",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "status"
+          ]
+        },
+        "description": "Tests direct liveness and identity of payment-service on native port 8084."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Gateway Routed Status Check (Port 8085 / 8080)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Verify routed payment-service status\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(\"UP\");",
+              "    pm.expect(jsonData.service).to.eql(\"payment-service\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/v1/payments/status",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "status"
+          ]
+        },
+        "description": "Verifies API Gateway reverse-proxy routing to payment-service via Eureka discovery."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Checkout - Approved Card (Card ending in 4242)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Generate a unique dynamic booking ID to support multiple collection test runs",
+              "var dynamicBookingId = Math.floor(Math.random() * 900000) + 100000;",
+              "pm.collectionVariables.set(\"bookingIdSuccess\", dynamicBookingId.toString());"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "",
+              "pm.test(\"Payment Status is SUCCESS\", function () {",
+              "    pm.expect(jsonData.status).to.eql(\"SUCCESS\");",
+              "});",
+              "",
+              "pm.test(\"Transaction Reference generated with TXN-RR- prefix\", function () {",
+              "    pm.expect(jsonData.transactionReference).to.be.a(\"string\");",
+              "    pm.expect(jsonData.transactionReference).to.match(/^TXN-RR-\\d{8}-[A-Z0-9]{6}$/);",
+              "    // Save transaction reference into collection variable for downstream verification requests",
+              "    pm.collectionVariables.set(\"lastTransactionReference\", jsonData.transactionReference);",
+              "});",
+              "",
+              "pm.test(\"Gateway Transaction ID populated with GW-TXN- prefix\", function () {",
+              "    pm.expect(jsonData.gatewayTransactionId).to.be.a(\"string\");",
+              "    pm.expect(jsonData.gatewayTransactionId).to.include(\"GW-TXN-\");",
+              "});",
+              "",
+              "pm.test(\"Receipt URL populated\", function () {",
+              "    pm.expect(jsonData.receiptUrl).to.be.a(\"string\");",
+              "    pm.expect(jsonData.receiptUrl).to.include(\"https://receipts.rentride.com/receipts/\");",
+              "});",
+              "",
+              "pm.test(\"Payload integrity matches request\", function () {",
+              "    pm.expect(jsonData.amount).to.eql(25500.00);",
+              "    pm.expect(jsonData.currency).to.eql(\"LKR\");",
+              "    pm.expect(jsonData.paymentMethod).to.eql(\"CREDIT_CARD\");",
+              "    pm.expect(jsonData.failureReason).to.be.null;",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-User-Id",
+            "value": "{{customerId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": {{bookingIdSuccess}},\n  \"amount\": 25500.00,\n  \"currency\": \"LKR\",\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"cardNumber\": \"4111111111114242\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2028,\n  \"cvv\": \"123\"\n}"
+        },
+        "url": {
+          "raw": "{{paymentServiceUrl}}/api/v1/payments/checkout",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "checkout"
+          ]
+        },
+        "description": "Simulates successful vehicle reservation checkout. The payment gateway returns SUCCESS with an authorization token and generated receipt."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Verify Transaction by Reference - Direct (Port 8084)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "",
+              "pm.test(\"Transaction is verified and status is SUCCESS\", function () {",
+              "    pm.expect(jsonData.isVerified).to.be.true;",
+              "    pm.expect(jsonData.status).to.eql(\"SUCCESS\");",
+              "    pm.expect(jsonData.transactionReference).to.eql(pm.collectionVariables.get(\"lastTransactionReference\"));",
+              "    pm.expect(jsonData.timestamp).to.not.be.empty;",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{paymentServiceUrl}}/api/v1/payments/verify/{{lastTransactionReference}}",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "verify",
+            "{{lastTransactionReference}}"
+          ]
+        },
+        "description": "Tests public transaction reference verification query on direct payment-service port."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Verify Transaction by Reference - Whitelisted via Gateway (Port 8085 / 8080)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK without JWT auth header\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "",
+              "pm.test(\"Gateway whitelisted route verifies successfully\", function () {",
+              "    pm.expect(jsonData.isVerified).to.be.true;",
+              "    pm.expect(jsonData.status).to.eql(\"SUCCESS\");",
+              "    pm.expect(jsonData.transactionReference).to.eql(pm.collectionVariables.get(\"lastTransactionReference\"));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/v1/payments/verify/{{lastTransactionReference}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "verify",
+            "{{lastTransactionReference}}"
+          ]
+        },
+        "description": "Tests public verification through API Gateway without requiring an Authorization header (validating RouterValidator whitelist)."
+      },
+      "response": []
+    },
+    {
+      "name": "6. Query Payment by Booking ID",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "",
+              "pm.test(\"Payment details match bookingId\", function () {",
+              "    pm.expect(jsonData.bookingId.toString()).to.eql(pm.collectionVariables.get(\"bookingIdSuccess\"));",
+              "    pm.expect(jsonData.status).to.eql(\"SUCCESS\");",
+              "    pm.expect(jsonData.transactionReference).to.eql(pm.collectionVariables.get(\"lastTransactionReference\"));",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{paymentServiceUrl}}/api/v1/payments/booking/{{bookingIdSuccess}}",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "booking",
+            "{{bookingIdSuccess}}"
+          ]
+        },
+        "description": "Queries payment record associated with the reservation."
+      },
+      "response": []
+    },
+    {
+      "name": "7. Checkout - Declined Card (Card ending in 0000)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "var dynamicBookingId = Math.floor(Math.random() * 900000) + 200000;",
+              "pm.collectionVariables.set(\"bookingIdDeclined\", dynamicBookingId.toString());"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK (Handled Business Rejection)\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "",
+              "pm.test(\"Payment Status is FAILED\", function () {",
+              "    pm.expect(jsonData.status).to.eql(\"FAILED\");",
+              "});",
+              "",
+              "pm.test(\"Failure reason is 'Insufficient funds'\", function () {",
+              "    pm.expect(jsonData.failureReason).to.eql(\"Insufficient funds\");",
+              "});",
+              "",
+              "pm.test(\"Gateway Transaction ID and Receipt are null\", function () {",
+              "    pm.expect(jsonData.gatewayTransactionId).to.be.null;",
+              "    pm.expect(jsonData.receiptUrl).to.be.null;",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-User-Id",
+            "value": "{{customerId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": {{bookingIdDeclined}},\n  \"amount\": 15000.00,\n  \"currency\": \"LKR\",\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"cardNumber\": \"4111111111110000\",\n  \"expiryMonth\": 10,\n  \"expiryYear\": 2027,\n  \"cvv\": \"999\"\n}"
+        },
+        "url": {
+          "raw": "{{paymentServiceUrl}}/api/v1/payments/checkout",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "checkout"
+          ]
+        },
+        "description": "Simulates payment decline scenario (card ending in 0000). The gateway simulator declines authorization with 'Insufficient funds'."
+      },
+      "response": []
+    },
+    {
+      "name": "8. Checkout - Gateway Timeout (Card ending in 9999)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "var dynamicBookingId = Math.floor(Math.random() * 900000) + 300000;",
+              "pm.collectionVariables.set(\"bookingIdTimeout\", dynamicBookingId.toString());"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK (Handled Business Rejection)\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "",
+              "pm.test(\"Payment Status is FAILED\", function () {",
+              "    pm.expect(jsonData.status).to.eql(\"FAILED\");",
+              "});",
+              "",
+              "pm.test(\"Failure reason is 'Acquiring network unresponsive'\", function () {",
+              "    pm.expect(jsonData.failureReason).to.eql(\"Acquiring network unresponsive\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-User-Id",
+            "value": "{{customerId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": {{bookingIdTimeout}},\n  \"amount\": 18000.00,\n  \"currency\": \"LKR\",\n  \"paymentMethod\": \"DEBIT_CARD\",\n  \"cardNumber\": \"4111111111119999\",\n  \"expiryMonth\": 8,\n  \"expiryYear\": 2029,\n  \"cvv\": \"555\"\n}"
+        },
+        "url": {
+          "raw": "{{paymentServiceUrl}}/api/v1/payments/checkout",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "checkout"
+          ]
+        },
+        "description": "Simulates payment timeout scenario (card ending in 9999). The gateway simulator declines authorization with 'Acquiring network unresponsive'."
+      },
+      "response": []
+    },
+    {
+      "name": "9. Idempotency Guard - Duplicate Payment Attempt (409 Conflict)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 409 Conflict\", function () {",
+              "    pm.response.to.have.status(409);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "",
+              "pm.test(\"Conflict error message verified\", function () {",
+              "    pm.expect(jsonData.status).to.eql(409);",
+              "    pm.expect(jsonData.error).to.eql(\"Conflict\");",
+              "    pm.expect(jsonData.message).to.eql(\"Booking has already been paid and confirmed\");",
+              "    pm.expect(jsonData.path).to.eql(\"/api/v1/payments/checkout\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-User-Id",
+            "value": "{{customerId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": {{bookingIdSuccess}},\n  \"amount\": 25500.00,\n  \"currency\": \"LKR\",\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"cardNumber\": \"4111111111114242\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2028,\n  \"cvv\": \"123\"\n}"
+        },
+        "url": {
+          "raw": "{{paymentServiceUrl}}/api/v1/payments/checkout",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "checkout"
+          ]
+        },
+        "description": "Re-attempts payment for an already paid and confirmed booking ({{bookingIdSuccess}}). Idempotency guard enforces 409 Conflict to prevent double-charging."
+      },
+      "response": []
+    },
+    {
+      "name": "10. Validation Guard - Invalid Card Number (400 Bad Request)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 400 Bad Request\", function () {",
+              "    pm.response.to.have.status(400);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"Validation error specifies invalid card details\", function () {",
+              "    pm.expect(jsonData.status).to.eql(400);",
+              "    pm.expect(jsonData.error).to.eql(\"Bad Request\");",
+              "    pm.expect(jsonData.message).to.include(\"card\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-User-Id",
+            "value": "{{customerId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": 9999,\n  \"amount\": 1500.00,\n  \"currency\": \"LKR\",\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"cardNumber\": \"12345\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2028,\n  \"cvv\": \"123\"\n}"
+        },
+        "url": {
+          "raw": "{{paymentServiceUrl}}/api/v1/payments/checkout",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "checkout"
+          ]
+        },
+        "description": "Asserts bean validation rejects malformed card number (less than 16 digits)."
+      },
+      "response": []
+    },
+    {
+      "name": "11. Validation Guard - Amount Below Minimum (400 Bad Request)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 400 Bad Request\", function () {",
+              "    pm.response.to.have.status(400);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"Validation error specifies minimum amount violation\", function () {",
+              "    pm.expect(jsonData.status).to.eql(400);",
+              "    pm.expect(jsonData.error).to.eql(\"Bad Request\");",
+              "    pm.expect(jsonData.message).to.include(\"100.00\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-User-Id",
+            "value": "{{customerId}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": 9998,\n  \"amount\": 50.00,\n  \"currency\": \"LKR\",\n  \"paymentMethod\": \"BANK_TRANSFER\"\n}"
+        },
+        "url": {
+          "raw": "{{paymentServiceUrl}}/api/v1/payments/checkout",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "checkout"
+          ]
+        },
+        "description": "Asserts bean validation rejects payment amount below 100.00 LKR."
+      },
+      "response": []
+    },
+    {
+      "name": "12. Transaction Verification - Not Found (404 Not Found)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 404 Not Found\", function () {",
+              "    pm.response.to.have.status(404);",
+              "});",
+              "",
+              "var jsonData = pm.response.json();",
+              "pm.test(\"Not Found error message contains reference\", function () {",
+              "    pm.expect(jsonData.status).to.eql(404);",
+              "    pm.expect(jsonData.error).to.eql(\"Not Found\");",
+              "    pm.expect(jsonData.message).to.include(\"TXN-NON-EXISTENT-9999\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{paymentServiceUrl}}/api/v1/payments/verify/TXN-NON-EXISTENT-9999",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "verify",
+            "TXN-NON-EXISTENT-9999"
+          ]
+        },
+        "description": "Tests query for non-existent transaction reference returning HTTP 404."
+      },
+      "response": []
+    }
+  ]
+}
