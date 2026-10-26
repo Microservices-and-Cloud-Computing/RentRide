@@ -92,7 +92,7 @@ public class Payment extends BaseEntity {
      * Current lifecycle status of the payment.
      */
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, length = 30)
     @Builder.Default
     private PaymentStatus status = PaymentStatus.PENDING;
 

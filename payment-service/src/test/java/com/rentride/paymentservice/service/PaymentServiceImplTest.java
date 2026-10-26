@@ -1,12 +1,17 @@
 package com.rentride.paymentservice.service;
 
+import com.rentride.paymentservice.client.BookingServiceClient;
 import com.rentride.paymentservice.dto.PaymentProcessRequest;
 import com.rentride.paymentservice.dto.PaymentResponse;
 import com.rentride.paymentservice.dto.TransactionVerifyResponse;
+import com.rentride.paymentservice.dto.external.BookingPaymentCallbackRequest;
+import com.rentride.paymentservice.dto.external.BookingSummaryResponse;
 import com.rentride.paymentservice.entity.Currency;
 import com.rentride.paymentservice.entity.Payment;
 import com.rentride.paymentservice.entity.PaymentMethod;
 import com.rentride.paymentservice.entity.PaymentStatus;
+import com.rentride.paymentservice.exception.BookingNotFoundException;
+import com.rentride.paymentservice.exception.InvalidPaymentDetailsException;
 import com.rentride.paymentservice.exception.PaymentConflictException;
 import com.rentride.paymentservice.exception.PaymentNotFoundException;
 import com.rentride.paymentservice.repository.PaymentRepository;
@@ -47,10 +52,14 @@ class PaymentServiceImplTest {
     @Mock
     private TransactionReferenceGenerator transactionReferenceGenerator;
 
+    @Mock
+    private BookingServiceClient bookingServiceClient;
+
     @InjectMocks
     private PaymentServiceImpl paymentService;
 
     private PaymentProcessRequest validCardRequest;
+    private BookingSummaryResponse pendingBooking;
 
     @BeforeEach
     void setUp() {
@@ -64,12 +73,21 @@ class PaymentServiceImplTest {
                 .expiryYear(2028)
                 .cvv("123")
                 .build();
+
+        pendingBooking = BookingSummaryResponse.builder()
+                .id(100L)
+                .bookingReference("RR-BK-20261026-TEST")
+                .status("PENDING_PAYMENT")
+                .totalCost(new BigDecimal("15000.00"))
+                .customerId(5L)
+                .build();
     }
 
     @Test
-    @DisplayName("processPayment: Successful gateway authorization updates status to SUCCESS and returns response")
+    @DisplayName("processPayment: Successful gateway authorization updates status to SUCCESS, notifies booking-service and returns response")
     void testProcessPayment_Success() {
         when(paymentRepository.existsByBookingIdAndStatus(100L, PaymentStatus.SUCCESS)).thenReturn(false);
+        when(bookingServiceClient.getBookingById(100L)).thenReturn(pendingBooking);
         when(transactionReferenceGenerator.generate()).thenReturn("TXN-RR-20261026-ABC123");
 
         Payment pendingPayment = Payment.builder()
@@ -98,12 +116,16 @@ class PaymentServiceImplTest {
         assertThat(response.getGatewayTransactionId()).isEqualTo("GW-TXN-UUID-999");
         assertThat(response.getReceiptUrl()).isEqualTo("https://receipts.rentride.com/receipts/TXN-RR-20261026-ABC123.pdf");
         assertThat(response.getTransactionReference()).isEqualTo("TXN-RR-20261026-ABC123");
+
+        // Verify OpenFeign callback
+        verify(bookingServiceClient).updatePaymentStatus(eq(100L), any(BookingPaymentCallbackRequest.class));
     }
 
     @Test
-    @DisplayName("processPayment: Gateway decline sets status to FAILED and records reason")
+    @DisplayName("processPayment: Gateway decline sets status to FAILED and notifies booking-service")
     void testProcessPayment_GatewayDeclined_SetsFailedStatus() {
         when(paymentRepository.existsByBookingIdAndStatus(100L, PaymentStatus.SUCCESS)).thenReturn(false);
+        when(bookingServiceClient.getBookingById(100L)).thenReturn(pendingBooking);
         when(transactionReferenceGenerator.generate()).thenReturn("TXN-RR-20261026-FAIL01");
 
         Payment pendingPayment = Payment.builder()
@@ -128,6 +150,8 @@ class PaymentServiceImplTest {
         assertThat(response.getStatus()).isEqualTo(PaymentStatus.FAILED);
         assertThat(response.getFailureReason()).isEqualTo("Insufficient funds");
         assertThat(response.getGatewayTransactionId()).isNull();
+
+        verify(bookingServiceClient).updatePaymentStatus(eq(100L), any(BookingPaymentCallbackRequest.class));
     }
 
     @Test
@@ -139,7 +163,95 @@ class PaymentServiceImplTest {
                 .isInstanceOf(PaymentConflictException.class)
                 .hasMessageContaining("Booking has already been paid and confirmed");
 
+        verify(bookingServiceClient, never()).getBookingById(any());
         verify(paymentGatewaySimulator, never()).process(any(), any());
+    }
+
+    @Test
+    @DisplayName("processPayment: Pre-check booking not found throws BookingNotFoundException")
+    void testProcessPayment_BookingNotFound_ThrowsException() {
+        when(paymentRepository.existsByBookingIdAndStatus(100L, PaymentStatus.SUCCESS)).thenReturn(false);
+        when(bookingServiceClient.getBookingById(100L)).thenReturn(null);
+
+        assertThatThrownBy(() -> paymentService.processPayment(5L, validCardRequest))
+                .isInstanceOf(BookingNotFoundException.class);
+
+        verify(paymentGatewaySimulator, never()).process(any(), any());
+    }
+
+    @Test
+    @DisplayName("processPayment: Pre-check booking in non-PENDING_PAYMENT status throws IllegalStateException")
+    void testProcessPayment_InvalidBookingStatus_ThrowsException() {
+        when(paymentRepository.existsByBookingIdAndStatus(100L, PaymentStatus.SUCCESS)).thenReturn(false);
+        BookingSummaryResponse confirmedBooking = BookingSummaryResponse.builder()
+                .id(100L)
+                .bookingReference("RR-BK-100")
+                .status("CONFIRMED")
+                .totalCost(new BigDecimal("15000.00"))
+                .build();
+        when(bookingServiceClient.getBookingById(100L)).thenReturn(confirmedBooking);
+
+        assertThatThrownBy(() -> paymentService.processPayment(5L, validCardRequest))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("must be PENDING_PAYMENT");
+
+        verify(paymentGatewaySimulator, never()).process(any(), any());
+    }
+
+    @Test
+    @DisplayName("processPayment: Pre-check amount mismatch throws InvalidPaymentDetailsException")
+    void testProcessPayment_AmountMismatch_ThrowsException() {
+        when(paymentRepository.existsByBookingIdAndStatus(100L, PaymentStatus.SUCCESS)).thenReturn(false);
+        BookingSummaryResponse differentCostBooking = BookingSummaryResponse.builder()
+                .id(100L)
+                .bookingReference("RR-BK-100")
+                .status("PENDING_PAYMENT")
+                .totalCost(new BigDecimal("20000.00")) // Expected 20,000 but request is 15,000
+                .build();
+        when(bookingServiceClient.getBookingById(100L)).thenReturn(differentCostBooking);
+
+        assertThatThrownBy(() -> paymentService.processPayment(5L, validCardRequest))
+                .isInstanceOf(InvalidPaymentDetailsException.class)
+                .hasMessageContaining("does not match booking total cost");
+
+        verify(paymentGatewaySimulator, never()).process(any(), any());
+    }
+
+    @Test
+    @DisplayName("processPayment: Feign callback failure on success marks payment as REQUIRES_RECONCILIATION")
+    void testProcessPayment_CallbackFails_MarksRequiresReconciliation() {
+        when(paymentRepository.existsByBookingIdAndStatus(100L, PaymentStatus.SUCCESS)).thenReturn(false);
+        when(bookingServiceClient.getBookingById(100L)).thenReturn(pendingBooking);
+        when(transactionReferenceGenerator.generate()).thenReturn("TXN-RR-20261026-RECON");
+
+        Payment pendingPayment = Payment.builder()
+                .id(3L)
+                .transactionReference("TXN-RR-20261026-RECON")
+                .bookingId(100L)
+                .customerId(5L)
+                .amount(new BigDecimal("15000.00"))
+                .currency(Currency.LKR)
+                .paymentMethod(PaymentMethod.CREDIT_CARD)
+                .status(PaymentStatus.PENDING)
+                .build();
+
+        when(paymentRepository.save(any(Payment.class))).thenReturn(pendingPayment);
+
+        GatewayResult gatewayResult = GatewayResult.success(
+                "GW-TXN-RECON-1",
+                "https://receipts.rentride.com/receipts/TXN-RR-20261026-RECON.pdf"
+        );
+        when(paymentGatewaySimulator.process(eq("TXN-RR-20261026-RECON"), any())).thenReturn(gatewayResult);
+
+        // Simulate Feign failure during callback
+        when(bookingServiceClient.updatePaymentStatus(eq(100L), any(BookingPaymentCallbackRequest.class)))
+                .thenThrow(new RuntimeException("Connection timed out to booking-service"));
+
+        PaymentResponse response = paymentService.processPayment(5L, validCardRequest);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(PaymentStatus.REQUIRES_RECONCILIATION);
+        assertThat(response.getFailureReason()).contains("Booking status update callback failed");
     }
 
     @Test
@@ -218,4 +330,3 @@ class PaymentServiceImplTest {
                 .hasMessageContaining("No payment records found for booking ID: 999");
     }
 }
-

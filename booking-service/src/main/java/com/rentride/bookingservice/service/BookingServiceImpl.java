@@ -2,6 +2,7 @@ package com.rentride.bookingservice.service;
 
 import com.rentride.bookingservice.dto.BookingCreateRequest;
 import com.rentride.bookingservice.dto.BookingLifecycleResponse;
+import com.rentride.bookingservice.dto.BookingPaymentCallbackRequest;
 import com.rentride.bookingservice.dto.BookingResponse;
 import com.rentride.bookingservice.dto.ReturnCondition;
 import com.rentride.bookingservice.dto.VehiclePickupRequest;
@@ -204,6 +205,48 @@ public class BookingServiceImpl implements BookingService {
         }
 
         return mapToResponse(saved, vehicle);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public BookingResponse updatePaymentStatus(Long id, BookingPaymentCallbackRequest request) {
+        log.info("Processing payment callback: bookingId={}, txnRef={}, status={}, amount={}",
+                id, request.getTransactionReference(), request.getPaymentStatus(), request.getPaidAmount());
+
+        Booking booking = bookingRepository.findById(id)
+                .orElseThrow(() -> new BookingNotFoundException(id));
+
+        if ("SUCCESS".equalsIgnoreCase(request.getPaymentStatus())) {
+            if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
+                log.warn("Invalid payment status transition: bookingId={}, currentStatus={}", id, booking.getStatus());
+                throw new InvalidBookingStateException(String.format(
+                        "Booking %s cannot be confirmed: current status is %s (must be PENDING_PAYMENT)",
+                        booking.getBookingReference(), booking.getStatus()));
+            }
+
+            booking.setStatus(BookingStatus.CONFIRMED);
+            Booking saved = bookingRepository.save(booking);
+            log.info("Booking {} transitioned to CONFIRMED via payment callback {}",
+                    saved.getBookingReference(), request.getTransactionReference());
+
+            VehicleResponseDto vehicle = null;
+            try {
+                vehicle = vehicleIntegrationService.getVehicleById(saved.getVehicleId());
+            } catch (Exception e) {
+                log.debug("Vehicle lookup omitted during payment callback confirmation");
+            }
+            return mapToResponse(saved, vehicle);
+        } else {
+            log.warn("Payment callback indicates payment failure for booking {}: txnRef={}",
+                    booking.getBookingReference(), request.getTransactionReference());
+            VehicleResponseDto vehicle = null;
+            try {
+                vehicle = vehicleIntegrationService.getVehicleById(booking.getVehicleId());
+            } catch (Exception e) {
+                log.debug("Vehicle lookup omitted during payment callback failure");
+            }
+            return mapToResponse(booking, vehicle);
+        }
     }
 
     @Override

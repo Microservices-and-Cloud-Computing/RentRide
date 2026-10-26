@@ -39,11 +39,32 @@ public class GlobalExceptionHandler {
                 .body(buildResponse(HttpStatus.NOT_FOUND, ex.getMessage(), request.getRequestURI(), null));
     }
 
+    @ExceptionHandler(BookingNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleBookingNotFound(BookingNotFoundException ex, HttpServletRequest request) {
+        log.warn("Booking not found: path={}, message={}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(buildResponse(HttpStatus.NOT_FOUND, ex.getMessage(), request.getRequestURI(), null));
+    }
+
     @ExceptionHandler(InvalidPaymentDetailsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidPaymentDetails(InvalidPaymentDetailsException ex, HttpServletRequest request) {
         log.warn("Invalid payment details: path={}, message={}", request.getRequestURI(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI(), null));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalState(IllegalStateException ex, HttpServletRequest request) {
+        log.warn("Illegal state conflict: path={}, message={}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(buildResponse(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI(), null));
+    }
+
+    @ExceptionHandler(BookingServiceUnavailableException.class)
+    public ResponseEntity<ErrorResponse> handleBookingServiceUnavailable(BookingServiceUnavailableException ex, HttpServletRequest request) {
+        log.error("Booking service unavailable: path={}, message={}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(buildResponse(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request.getRequestURI(), null));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -108,4 +129,3 @@ public class GlobalExceptionHandler {
                 .build();
     }
 }
-

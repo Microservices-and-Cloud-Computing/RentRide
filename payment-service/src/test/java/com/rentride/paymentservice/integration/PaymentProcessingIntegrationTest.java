@@ -2,7 +2,9 @@ package com.rentride.paymentservice.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rentride.paymentservice.client.BookingServiceClient;
 import com.rentride.paymentservice.dto.PaymentProcessRequest;
+import com.rentride.paymentservice.dto.external.BookingSummaryResponse;
 import com.rentride.paymentservice.entity.Currency;
 import com.rentride.paymentservice.entity.PaymentMethod;
 import com.rentride.paymentservice.repository.PaymentRepository;
@@ -14,12 +16,16 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.math.BigDecimal;
 
 import static org.hamcrest.Matchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -27,7 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * End-to-end integration tests for Payment Processing, Gateway Simulation,
- * Idempotency Enforcement, and Transaction Verification.
+ * Idempotency Enforcement, OpenFeign Booking Service Callback, and Transaction Verification.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -43,9 +49,32 @@ class PaymentProcessingIntegrationTest {
     @Autowired
     private PaymentRepository paymentRepository;
 
+    @MockitoBean
+    private BookingServiceClient bookingServiceClient;
+
     @BeforeEach
     void setUp() {
         paymentRepository.deleteAll();
+
+        // Default mock behavior for BookingServiceClient to allow seamless checkout verification
+        when(bookingServiceClient.getBookingById(anyLong())).thenAnswer(invocation -> {
+            Long bookingId = invocation.getArgument(0);
+            return BookingSummaryResponse.builder()
+                    .id(bookingId)
+                    .bookingReference("RR-BK-" + bookingId)
+                    .status("PENDING_PAYMENT")
+                    .totalCost(null) // null totalCost allows arbitrary valid amount matching
+                    .build();
+        });
+
+        when(bookingServiceClient.updatePaymentStatus(anyLong(), any())).thenAnswer(invocation -> {
+            Long bookingId = invocation.getArgument(0);
+            return BookingSummaryResponse.builder()
+                    .id(bookingId)
+                    .bookingReference("RR-BK-" + bookingId)
+                    .status("CONFIRMED")
+                    .build();
+        });
     }
 
     @Test
@@ -223,4 +252,3 @@ class PaymentProcessingIntegrationTest {
                 .andExpect(jsonPath("$.message", containsString("TXN-NON-EXISTENT-999")));
     }
 }
-

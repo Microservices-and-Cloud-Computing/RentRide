@@ -23,6 +23,10 @@ public enum PaymentStatus {
     /**
      * Settled payment was fully or partially refunded to the customer.
      */
-    REFUNDED
-}
+    REFUNDED,
 
+    /**
+     * Payment was settled by gateway but downstream booking callback failed; requires manual/automated reconciliation.
+     */
+    REQUIRES_RECONCILIATION
+}
