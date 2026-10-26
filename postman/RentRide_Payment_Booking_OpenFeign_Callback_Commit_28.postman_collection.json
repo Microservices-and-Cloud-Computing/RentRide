@@ -1,0 +1,882 @@
+{
+  "info": {
+    "_postman_id": "commit28-openfeign-callback-rentride",
+    "name": "RentRide - Commit 28: OpenFeign Payment-to-Booking Callback & State Synchronization",
+    "description": "End-to-end Postman collection for verifying Commit 28 deliverables: Declarative OpenFeign RPC callback from payment-service (port 8084) to booking-service (port 8083), pre-flight reservation validation, distributed state synchronization (PENDING_PAYMENT -> CONFIRMED), gateway decline retry handling, amount mismatch guards, idempotency conflict enforcement, and transaction verification.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "paymentServiceUrl",
+      "value": "http://localhost:8084",
+      "type": "string",
+      "description": "Direct Payment Microservice URL (Port 8084)"
+    },
+    {
+      "key": "bookingServiceUrl",
+      "value": "http://localhost:8083",
+      "type": "string",
+      "description": "Direct Booking Microservice URL (Port 8083)"
+    },
+    {
+      "key": "vehicleServiceUrl",
+      "value": "http://localhost:8082",
+      "type": "string",
+      "description": "Direct Vehicle Microservice URL (Port 8082)"
+    },
+    {
+      "key": "gatewayUrl",
+      "value": "http://localhost:8085",
+      "type": "string",
+      "description": "RentRide API Gateway URL (Port 8085 or 8080)"
+    },
+    {
+      "key": "customerId",
+      "value": "10",
+      "type": "string",
+      "description": "Simulated customer ID passed in X-User-Id header"
+    },
+    {
+      "key": "providerId",
+      "value": "2",
+      "type": "string",
+      "description": "Simulated vehicle provider ID passed in X-User-Id header"
+    },
+    {
+      "key": "vehicleId",
+      "value": "1",
+      "type": "string",
+      "description": "Primary vehicle ID for reservation tests"
+    },
+    {
+      "key": "liveBookingId",
+      "value": "",
+      "type": "string",
+      "description": "Dynamically saved Booking ID from successful reservation creation"
+    },
+    {
+      "key": "liveBookingReference",
+      "value": "",
+      "type": "string",
+      "description": "Dynamically saved booking reference"
+    },
+    {
+      "key": "liveTotalCost",
+      "value": "20000.00",
+      "type": "string",
+      "description": "Dynamically saved totalCost from created booking"
+    },
+    {
+      "key": "liveTxnRef",
+      "value": "",
+      "type": "string",
+      "description": "Dynamically saved transaction reference from successful checkout"
+    },
+    {
+      "key": "failedBookingId",
+      "value": "",
+      "type": "string",
+      "description": "Dynamically saved Booking ID used for declined payment test"
+    },
+    {
+      "key": "mismatchBookingId",
+      "value": "",
+      "type": "string",
+      "description": "Dynamically saved Booking ID used for amount mismatch test"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Microservice Discovery & Health Pre-Checks",
+      "description": "Verifies that Eureka service discovery and the required microservices are active and reachable.",
+      "item": [
+        {
+          "name": "1.1 Check Payment-Service Status (Port 8084)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Verify payment-service identity\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql(\"UP\");",
+                  "    pm.expect(json.service).to.eql(\"payment-service\");",
+                  "    pm.expect(json.port).to.eql(8084);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{paymentServiceUrl}}/api/v1/payments/status",
+              "host": ["{{paymentServiceUrl}}"],
+              "path": ["api", "v1", "payments", "status"]
+            }
+          }
+        },
+        {
+          "name": "1.2 Check Booking-Service Status (Port 8083)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Verify booking-service identity\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql(\"UP\");",
+                  "    pm.expect(json.service).to.eql(\"booking-service\");",
+                  "    pm.expect(json.port).to.eql(8083);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{bookingServiceUrl}}/api/v1/bookings/status",
+              "host": ["{{bookingServiceUrl}}"],
+              "path": ["api", "v1", "bookings", "status"]
+            }
+          }
+        },
+        {
+          "name": "1.3 Query Eureka Apps Catalog (Port 8761)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Eureka catalog contains PAYMENT-SERVICE and BOOKING-SERVICE\", function () {",
+                  "    var text = pm.response.text();",
+                  "    pm.expect(text).to.include(\"PAYMENT-SERVICE\");",
+                  "    pm.expect(text).to.include(\"BOOKING-SERVICE\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "http://localhost:8761/eureka/apps",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "8761",
+              "path": ["eureka", "apps"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Happy Path - E2E Feign Callback & State Confirmation",
+      "description": "Creates a reservation in booking-service (PENDING_PAYMENT), executes checkout in payment-service, and confirms that booking-service is automatically updated to CONFIRMED via OpenFeign RPC callback.",
+      "item": [
+        {
+          "name": "2.1 Reset Vehicle 1 to AVAILABLE",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Vehicle reset to AVAILABLE\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql(\"AVAILABLE\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{providerId}}" },
+              { "key": "X-User-Role", "value": "ROLE_PROVIDER" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"AVAILABLE\"\n}"
+            },
+            "url": {
+              "raw": "{{vehicleServiceUrl}}/api/v1/vehicles/{{vehicleId}}/status",
+              "host": ["{{vehicleServiceUrl}}"],
+              "path": ["api", "v1", "vehicles", "{{vehicleId}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "2.2 Create Reservation in Booking-Service (PENDING_PAYMENT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Reservation successfully created (HTTP 200 or 201)\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Initial status is PENDING_PAYMENT\", function () {",
+                  "    pm.expect(json.status).to.eql(\"PENDING_PAYMENT\");",
+                  "    pm.expect(json.id).to.not.be.undefined;",
+                  "    pm.expect(json.totalCost).to.not.be.undefined;",
+                  "});",
+                  "",
+                  "// Dynamically store variables for subsequent checkout steps",
+                  "pm.collectionVariables.set(\"liveBookingId\", String(json.id));",
+                  "pm.collectionVariables.set(\"liveBookingReference\", json.bookingReference);",
+                  "pm.collectionVariables.set(\"liveTotalCost\", String(json.totalCost));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{customerId}}" },
+              { "key": "X-User-Role", "value": "ROLE_CUSTOMER" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": {{customerId}},\n  \"providerId\": {{providerId}},\n  \"vehicleId\": {{vehicleId}},\n  \"startDate\": \"2026-12-20\",\n  \"endDate\": \"2026-12-22\",\n  \"dailyRate\": 10000.00,\n  \"totalCost\": 20000.00,\n  \"pickupNotes\": \"Postman E2E Feign Callback Test Reservation\"\n}"
+            },
+            "url": {
+              "raw": "{{bookingServiceUrl}}/api/v1/bookings",
+              "host": ["{{bookingServiceUrl}}"],
+              "path": ["api", "v1", "bookings"]
+            }
+          }
+        },
+        {
+          "name": "2.3 Verify Reservation is PENDING_PAYMENT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Booking exists and is PENDING_PAYMENT\", function () {",
+                  "    var json = pm.response.json();",
+                  "    pm.expect(String(json.id)).to.eql(pm.collectionVariables.get(\"liveBookingId\"));",
+                  "    pm.expect(json.status).to.eql(\"PENDING_PAYMENT\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-User-Id", "value": "{{customerId}}" },
+              { "key": "X-User-Role", "value": "ROLE_CUSTOMER" }
+            ],
+            "url": {
+              "raw": "{{bookingServiceUrl}}/api/v1/bookings/{{liveBookingId}}",
+              "host": ["{{bookingServiceUrl}}"],
+              "path": ["api", "v1", "bookings", "{{liveBookingId}}"]
+            }
+          }
+        },
+        {
+          "name": "2.4 Execute Checkout in Payment-Service (Fires Feign Callback)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Payment settled as SUCCESS with receipt and gateway transaction\", function () {",
+                  "    pm.expect(json.status).to.eql(\"SUCCESS\");",
+                  "    pm.expect(json.bookingId).to.eql(Number(pm.collectionVariables.get(\"liveBookingId\")));",
+                  "    pm.expect(json.transactionReference).to.include(\"TXN-RR-\");",
+                  "    pm.expect(json.gatewayTransactionId).to.include(\"GW-TXN-\");",
+                  "    pm.expect(json.receiptUrl).to.include(\"https://receipts.rentride.com/\");",
+                  "});",
+                  "",
+                  "// Capture transaction reference for verification query",
+                  "pm.collectionVariables.set(\"liveTxnRef\", json.transactionReference);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{customerId}}" },
+              { "key": "X-User-Role", "value": "ROLE_CUSTOMER" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": {{liveBookingId}},\n  \"amount\": {{liveTotalCost}},\n  \"currency\": \"LKR\",\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"cardNumber\": \"4242424242424242\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2028,\n  \"cvv\": \"123\"\n}"
+            },
+            "url": {
+              "raw": "{{paymentServiceUrl}}/api/v1/payments/checkout",
+              "host": ["{{paymentServiceUrl}}"],
+              "path": ["api", "v1", "payments", "checkout"]
+            }
+          }
+        },
+        {
+          "name": "2.5 Verify Booking Transitioned to CONFIRMED via Feign Callback",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Distributed state verified: Booking transitioned to CONFIRMED\", function () {",
+                  "    pm.expect(String(json.id)).to.eql(pm.collectionVariables.get(\"liveBookingId\"));",
+                  "    pm.expect(json.status).to.eql(\"CONFIRMED\");",
+                  "    pm.expect(json.updatedAt).to.not.be.undefined;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-User-Id", "value": "{{customerId}}" },
+              { "key": "X-User-Role", "value": "ROLE_CUSTOMER" }
+            ],
+            "url": {
+              "raw": "{{bookingServiceUrl}}/api/v1/bookings/{{liveBookingId}}",
+              "host": ["{{bookingServiceUrl}}"],
+              "path": ["api", "v1", "bookings", "{{liveBookingId}}"]
+            }
+          }
+        },
+        {
+          "name": "2.6 Verify Transaction Reference via Public Verification API",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Transaction is verified and matches payment record\", function () {",
+                  "    pm.expect(json.isVerified).to.be.true;",
+                  "    pm.expect(json.status).to.eql(\"SUCCESS\");",
+                  "    pm.expect(json.transactionReference).to.eql(pm.collectionVariables.get(\"liveTxnRef\"));",
+                  "    pm.expect(json.bookingId).to.eql(Number(pm.collectionVariables.get(\"liveBookingId\")));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{paymentServiceUrl}}/api/v1/payments/verify/{{liveTxnRef}}",
+              "host": ["{{paymentServiceUrl}}"],
+              "path": ["api", "v1", "payments", "verify", "{{liveTxnRef}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Resilience, Error Decoding & Edge Cases",
+      "description": "Verifies idempotency conflict rejection, amount mismatch pre-flight guard, card decline handling, and 404 Feign error decoding.",
+      "item": [
+        {
+          "name": "3.1 Idempotency Conflict - Duplicate Payment on Already CONFIRMED Booking",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 409 Conflict\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Rejection message indicates booking is already paid/confirmed\", function () {",
+                  "    pm.expect(json.error).to.eql(\"Conflict\");",
+                  "    pm.expect(json.message).to.match(/already been paid|cannot be paid: current status is CONFIRMED/);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{customerId}}" },
+              { "key": "X-User-Role", "value": "ROLE_CUSTOMER" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": {{liveBookingId}},\n  \"amount\": {{liveTotalCost}},\n  \"currency\": \"LKR\",\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"cardNumber\": \"4242424242424242\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2028,\n  \"cvv\": \"123\"\n}"
+            },
+            "url": {
+              "raw": "{{paymentServiceUrl}}/api/v1/payments/checkout",
+              "host": ["{{paymentServiceUrl}}"],
+              "path": ["api", "v1", "payments", "checkout"]
+            }
+          }
+        },
+        {
+          "name": "3.2 Reset Vehicle 1 for Amount Mismatch Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Vehicle reset to AVAILABLE\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{providerId}}" },
+              { "key": "X-User-Role", "value": "ROLE_PROVIDER" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"AVAILABLE\"\n}"
+            },
+            "url": {
+              "raw": "{{vehicleServiceUrl}}/api/v1/vehicles/{{vehicleId}}/status",
+              "host": ["{{vehicleServiceUrl}}"],
+              "path": ["api", "v1", "vehicles", "{{vehicleId}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "3.3 Create Reservation with Cost 20000.00 for Mismatch Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Reservation created\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.collectionVariables.set(\"mismatchBookingId\", String(json.id));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{customerId}}" },
+              { "key": "X-User-Role", "value": "ROLE_CUSTOMER" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": {{customerId}},\n  \"providerId\": {{providerId}},\n  \"vehicleId\": {{vehicleId}},\n  \"startDate\": \"2026-12-25\",\n  \"endDate\": \"2026-12-27\",\n  \"dailyRate\": 10000.00,\n  \"totalCost\": 20000.00,\n  \"pickupNotes\": \"Mismatch Test Reservation\"\n}"
+            },
+            "url": {
+              "raw": "{{bookingServiceUrl}}/api/v1/bookings",
+              "host": ["{{bookingServiceUrl}}"],
+              "path": ["api", "v1", "bookings"]
+            }
+          }
+        },
+        {
+          "name": "3.4 Pre-Check Amount Mismatch - Rejected Before Gateway Call (400 Bad Request)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Message specifies amount mismatch\", function () {",
+                  "    pm.expect(json.error).to.eql(\"Bad Request\");",
+                  "    pm.expect(json.message).to.include(\"does not match booking total cost\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{customerId}}" },
+              { "key": "X-User-Role", "value": "ROLE_CUSTOMER" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": {{mismatchBookingId}},\n  \"amount\": 5000.00,\n  \"currency\": \"LKR\",\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"cardNumber\": \"4242424242424242\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2028,\n  \"cvv\": \"123\"\n}"
+            },
+            "url": {
+              "raw": "{{paymentServiceUrl}}/api/v1/payments/checkout",
+              "host": ["{{paymentServiceUrl}}"],
+              "path": ["api", "v1", "payments", "checkout"]
+            }
+          }
+        },
+        {
+          "name": "3.5 Reset Vehicle 1 for Card Decline Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Vehicle reset to AVAILABLE\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{providerId}}" },
+              { "key": "X-User-Role", "value": "ROLE_PROVIDER" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"AVAILABLE\"\n}"
+            },
+            "url": {
+              "raw": "{{vehicleServiceUrl}}/api/v1/vehicles/{{vehicleId}}/status",
+              "host": ["{{vehicleServiceUrl}}"],
+              "path": ["api", "v1", "vehicles", "{{vehicleId}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "3.6 Create Reservation for Card Decline Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Reservation created\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.collectionVariables.set(\"failedBookingId\", String(json.id));"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{customerId}}" },
+              { "key": "X-User-Role", "value": "ROLE_CUSTOMER" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": {{customerId}},\n  \"providerId\": {{providerId}},\n  \"vehicleId\": {{vehicleId}},\n  \"startDate\": \"2026-12-28\",\n  \"endDate\": \"2026-12-30\",\n  \"dailyRate\": 10000.00,\n  \"totalCost\": 20000.00,\n  \"pickupNotes\": \"Declined Payment Reservation\"\n}"
+            },
+            "url": {
+              "raw": "{{bookingServiceUrl}}/api/v1/bookings",
+              "host": ["{{bookingServiceUrl}}"],
+              "path": ["api", "v1", "bookings"]
+            }
+          }
+        },
+        {
+          "name": "3.7 Card Declined (Ending in 0000) - Handled Status FAILED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK (Handled Business Decline)\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Status is FAILED with Insufficient funds reason\", function () {",
+                  "    pm.expect(json.status).to.eql(\"FAILED\");",
+                  "    pm.expect(json.failureReason).to.eql(\"Insufficient funds\");",
+                  "    pm.expect(json.gatewayTransactionId).to.be.null;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{customerId}}" },
+              { "key": "X-User-Role", "value": "ROLE_CUSTOMER" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": {{failedBookingId}},\n  \"amount\": 20000.00,\n  \"currency\": \"LKR\",\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"cardNumber\": \"4242424242420000\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2028,\n  \"cvv\": \"123\"\n}"
+            },
+            "url": {
+              "raw": "{{paymentServiceUrl}}/api/v1/payments/checkout",
+              "host": ["{{paymentServiceUrl}}"],
+              "path": ["api", "v1", "payments", "checkout"]
+            }
+          }
+        },
+        {
+          "name": "3.8 Verify Booking Retains PENDING_PAYMENT on Failed Attempt",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Reservation remains in PENDING_PAYMENT to allow customer retry\", function () {",
+                  "    pm.expect(String(json.id)).to.eql(pm.collectionVariables.get(\"failedBookingId\"));",
+                  "    pm.expect(json.status).to.eql(\"PENDING_PAYMENT\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-User-Id", "value": "{{customerId}}" },
+              { "key": "X-User-Role", "value": "ROLE_CUSTOMER" }
+            ],
+            "url": {
+              "raw": "{{bookingServiceUrl}}/api/v1/bookings/{{failedBookingId}}",
+              "host": ["{{bookingServiceUrl}}"],
+              "path": ["api", "v1", "bookings", "{{failedBookingId}}"]
+            }
+          }
+        },
+        {
+          "name": "3.9 Non-Existent Booking ID - 404 via CustomFeignErrorDecoder",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404 Not Found\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Error specifies Booking not found\", function () {",
+                  "    pm.expect(json.error).to.eql(\"Not Found\");",
+                  "    pm.expect(json.message).to.include(\"Booking not found\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-User-Id", "value": "{{customerId}}" },
+              { "key": "X-User-Role", "value": "ROLE_CUSTOMER" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": 999999,\n  \"amount\": 20000.00,\n  \"currency\": \"LKR\",\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"cardNumber\": \"4242424242424242\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2028,\n  \"cvv\": \"123\"\n}"
+            },
+            "url": {
+              "raw": "{{paymentServiceUrl}}/api/v1/payments/checkout",
+              "host": ["{{paymentServiceUrl}}"],
+              "path": ["api", "v1", "payments", "checkout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Direct Booking-Service Feign Target Endpoint Verification",
+      "description": "Tests the PATCH /api/v1/bookings/{id}/payment-status endpoint implemented in booking-service to support OpenFeign callbacks.",
+      "item": [
+        {
+          "name": "4.1 Direct Callback Invalidation - FAILED Status retains PENDING_PAYMENT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Direct callback with FAILED retains PENDING_PAYMENT\", function () {",
+                  "    pm.expect(json.status).to.eql(\"PENDING_PAYMENT\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionReference\": \"TXN-MANUAL-FAILED-001\",\n  \"paymentStatus\": \"FAILED\",\n  \"paidAmount\": 20000.00,\n  \"paymentDate\": \"2026-10-26T20:00:00\"\n}"
+            },
+            "url": {
+              "raw": "{{bookingServiceUrl}}/api/v1/bookings/{{failedBookingId}}/payment-status",
+              "host": ["{{bookingServiceUrl}}"],
+              "path": ["api", "v1", "bookings", "{{failedBookingId}}", "payment-status"]
+            }
+          }
+        },
+        {
+          "name": "4.2 Direct Callback Confirmation - SUCCESS transitions to CONFIRMED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Direct callback with SUCCESS transitions status to CONFIRMED\", function () {",
+                  "    pm.expect(json.status).to.eql(\"CONFIRMED\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionReference\": \"TXN-MANUAL-CONFIRM-001\",\n  \"paymentStatus\": \"SUCCESS\",\n  \"paidAmount\": 20000.00,\n  \"paymentDate\": \"2026-10-26T20:00:00\"\n}"
+            },
+            "url": {
+              "raw": "{{bookingServiceUrl}}/api/v1/bookings/{{failedBookingId}}/payment-status",
+              "host": ["{{bookingServiceUrl}}"],
+              "path": ["api", "v1", "bookings", "{{failedBookingId}}", "payment-status"]
+            }
+          }
+        },
+        {
+          "name": "4.3 Direct Callback - Non-Existent Booking ID returns 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404 Not Found\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "var json = pm.response.json();",
+                  "pm.test(\"Error confirms Booking not found\", function () {",
+                  "    pm.expect(json.error).to.eql(\"Not Found\");",
+                  "    pm.expect(json.message).to.include(\"Booking not found\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transactionReference\": \"TXN-NONEXISTENT-001\",\n  \"paymentStatus\": \"SUCCESS\",\n  \"paidAmount\": 20000.00,\n  \"paymentDate\": \"2026-10-26T20:00:00\"\n}"
+            },
+            "url": {
+              "raw": "{{bookingServiceUrl}}/api/v1/bookings/999999/payment-status",
+              "host": ["{{bookingServiceUrl}}"],
+              "path": ["api", "v1", "bookings", "999999", "payment-status"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

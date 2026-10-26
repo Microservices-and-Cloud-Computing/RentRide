@@ -358,3 +358,4 @@ class PaymentBookingCallbackIntegrationTest {
         assertThat(payments.get(0).getStatus()).isEqualTo(PaymentStatus.REQUIRES_RECONCILIATION);
     }
 }
+
