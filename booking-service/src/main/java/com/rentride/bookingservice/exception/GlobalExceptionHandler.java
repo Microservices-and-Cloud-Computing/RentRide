@@ -28,6 +28,13 @@ public class GlobalExceptionHandler {
                 .body(buildResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request.getRequestURI()));
     }
 
+    @ExceptionHandler(InvalidBookingStateException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidBookingState(InvalidBookingStateException ex, HttpServletRequest request) {
+        log.warn("Invalid booking state transition: path={}, message={}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(buildResponse(HttpStatus.CONFLICT, ex.getMessage(), request.getRequestURI()));
+    }
+
     @ExceptionHandler(BookingConflictException.class)
     public ResponseEntity<ErrorResponse> handleBookingConflict(BookingConflictException ex, HttpServletRequest request) {
         log.warn("Booking conflict detected: path={}, message={}", request.getRequestURI(), ex.getMessage());
@@ -66,6 +73,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UnauthorizedBookingAccessException.class)
     public ResponseEntity<ErrorResponse> handleUnauthorizedAccess(UnauthorizedBookingAccessException ex, HttpServletRequest request) {
         log.warn("Unauthorized booking access: path={}, message={}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(buildResponse(HttpStatus.FORBIDDEN, ex.getMessage(), request.getRequestURI()));
+    }
+
+    @ExceptionHandler(UnauthorizedProviderException.class)
+    public ResponseEntity<ErrorResponse> handleUnauthorizedProvider(UnauthorizedProviderException ex, HttpServletRequest request) {
+        log.warn("Unauthorized provider access: path={}, message={}", request.getRequestURI(), ex.getMessage());
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(buildResponse(HttpStatus.FORBIDDEN, ex.getMessage(), request.getRequestURI()));
     }

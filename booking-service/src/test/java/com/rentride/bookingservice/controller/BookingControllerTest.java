@@ -2,12 +2,18 @@ package com.rentride.bookingservice.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rentride.bookingservice.dto.BookingCreateRequest;
+import com.rentride.bookingservice.dto.BookingLifecycleResponse;
 import com.rentride.bookingservice.dto.BookingResponse;
+import com.rentride.bookingservice.dto.ReturnCondition;
+import com.rentride.bookingservice.dto.VehiclePickupRequest;
+import com.rentride.bookingservice.dto.VehicleReturnRequest;
 import com.rentride.bookingservice.entity.BookingStatus;
 import com.rentride.bookingservice.exception.BookingConflictException;
 import com.rentride.bookingservice.exception.BookingNotFoundException;
 import com.rentride.bookingservice.exception.GlobalExceptionHandler;
+import com.rentride.bookingservice.exception.InvalidBookingStateException;
 import com.rentride.bookingservice.exception.UnauthorizedBookingAccessException;
+import com.rentride.bookingservice.exception.UnauthorizedProviderException;
 import com.rentride.bookingservice.exception.VehicleUnavailableException;
 import com.rentride.bookingservice.service.BookingService;
 import org.junit.jupiter.api.DisplayName;
@@ -21,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -101,7 +108,6 @@ class BookingControllerTest {
     @Test
     @DisplayName("POST /api/v1/bookings: Should return 400 Bad Request when bean validation fails")
     void testCreateBooking_BeanValidationFailure_Returns400() throws Exception {
-        // vehicleId is null and startDate is in the past
         BookingCreateRequest request = BookingCreateRequest.builder()
                 .startDate(LocalDate.now().minusDays(2))
                 .endDate(LocalDate.now().minusDays(5))
@@ -235,5 +241,153 @@ class BookingControllerTest {
                 .andExpect(jsonPath("$[0].id").value(100))
                 .andExpect(jsonPath("$[0].bookingReference").value("RR-BK-20261026-TEST01"));
     }
-}
 
+    @Test
+    @DisplayName("POST /api/v1/bookings/{id}/confirm: Should return 200 OK with confirmed BookingResponse")
+    void testConfirmBooking_Success_Returns200() throws Exception {
+        BookingResponse response = BookingResponse.builder()
+                .id(100L)
+                .bookingReference("RR-BK-20261026-TEST01")
+                .status(BookingStatus.CONFIRMED)
+                .build();
+
+        when(bookingService.confirmBooking(100L)).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/bookings/100/confirm"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(100))
+                .andExpect(jsonPath("$.status").value("CONFIRMED"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/bookings/{id}/pickup: Should return 200 OK with BookingLifecycleResponse")
+    void testRecordPickup_Success_Returns200() throws Exception {
+        VehiclePickupRequest request = VehiclePickupRequest.builder()
+                .odometerReading(45200.0)
+                .fuelLevelPercent(100)
+                .handoverNotes("Key given with original documents")
+                .build();
+
+        BookingLifecycleResponse response = BookingLifecycleResponse.builder()
+                .id(100L)
+                .bookingReference("RR-BK-20261026-TEST01")
+                .customerId(50L)
+                .providerId(10L)
+                .vehicleId(1L)
+                .status(BookingStatus.ACTIVE_RENTAL)
+                .actualPickupTime(LocalDateTime.now())
+                .vehicleStatusSummary("RENTED")
+                .startOdometer(45200.0)
+                .startFuelPercent(100)
+                .build();
+
+        when(bookingService.recordVehiclePickup(eq(100L), eq(10L), any(VehiclePickupRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/bookings/100/pickup")
+                        .header("X-User-Id", 10L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACTIVE_RENTAL"))
+                .andExpect(jsonPath("$.startOdometer").value(45200.0))
+                .andExpect(jsonPath("$.vehicleStatusSummary").value("RENTED"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/bookings/{id}/pickup: Should return 409 Conflict when state is invalid")
+    void testRecordPickup_InvalidState_Returns409() throws Exception {
+        VehiclePickupRequest request = VehiclePickupRequest.builder()
+                .odometerReading(45200.0)
+                .fuelLevelPercent(100)
+                .build();
+
+        when(bookingService.recordVehiclePickup(eq(100L), eq(10L), any(VehiclePickupRequest.class)))
+                .thenThrow(new InvalidBookingStateException("Vehicle pickup cannot be recorded: current status is PENDING_PAYMENT (must be CONFIRMED)"));
+
+        mockMvc.perform(post("/api/v1/bookings/100/pickup")
+                        .header("X-User-Id", 10L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message").value("Vehicle pickup cannot be recorded: current status is PENDING_PAYMENT (must be CONFIRMED)"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/bookings/{id}/pickup: Should return 403 Forbidden when unauthorized provider")
+    void testRecordPickup_UnauthorizedProvider_Returns403() throws Exception {
+        VehiclePickupRequest request = VehiclePickupRequest.builder()
+                .odometerReading(45200.0)
+                .fuelLevelPercent(100)
+                .build();
+
+        when(bookingService.recordVehiclePickup(eq(100L), eq(99L), any(VehiclePickupRequest.class)))
+                .thenThrow(new UnauthorizedProviderException("You do not have permission to manage handovers for booking ID: 100"));
+
+        mockMvc.perform(post("/api/v1/bookings/100/pickup")
+                        .header("X-User-Id", 99L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/bookings/{id}/return: Should return 200 OK with BookingLifecycleResponse")
+    void testRecordReturn_Success_Returns200() throws Exception {
+        VehicleReturnRequest request = VehicleReturnRequest.builder()
+                .odometerReading(45600.0)
+                .fuelLevelPercent(100)
+                .vehicleCondition(ReturnCondition.GOOD)
+                .returnNotes("Returned in excellent condition")
+                .additionalCharges(BigDecimal.ZERO)
+                .build();
+
+        BookingLifecycleResponse response = BookingLifecycleResponse.builder()
+                .id(100L)
+                .bookingReference("RR-BK-20261026-TEST01")
+                .customerId(50L)
+                .providerId(10L)
+                .vehicleId(1L)
+                .status(BookingStatus.COMPLETED)
+                .actualReturnDate(LocalDateTime.now())
+                .vehicleStatusSummary("AVAILABLE")
+                .endOdometer(45600.0)
+                .endFuelPercent(100)
+                .totalCost(new BigDecimal("24000.00"))
+                .additionalCharges(BigDecimal.ZERO)
+                .finalAmountPaid(new BigDecimal("24000.00"))
+                .build();
+
+        when(bookingService.recordVehicleReturn(eq(100L), eq(10L), any(VehicleReturnRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/bookings/100/return")
+                        .header("X-User-Id", 10L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.vehicleStatusSummary").value("AVAILABLE"))
+                .andExpect(jsonPath("$.finalAmountPaid").value(24000.00));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/bookings/{id}/return: Should return 409 Conflict when state is invalid")
+    void testRecordReturn_InvalidState_Returns409() throws Exception {
+        VehicleReturnRequest request = VehicleReturnRequest.builder()
+                .odometerReading(45600.0)
+                .fuelLevelPercent(100)
+                .vehicleCondition(ReturnCondition.GOOD)
+                .build();
+
+        when(bookingService.recordVehicleReturn(eq(100L), eq(10L), any(VehicleReturnRequest.class)))
+                .thenThrow(new InvalidBookingStateException("Vehicle return cannot be processed: current status is CONFIRMED (must be ACTIVE_RENTAL)"));
+
+        mockMvc.perform(post("/api/v1/bookings/100/return")
+                        .header("X-User-Id", 10L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
+    }
+}

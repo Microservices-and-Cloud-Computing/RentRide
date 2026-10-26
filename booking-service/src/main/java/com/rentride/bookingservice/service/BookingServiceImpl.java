@@ -1,14 +1,21 @@
 package com.rentride.bookingservice.service;
 
 import com.rentride.bookingservice.dto.BookingCreateRequest;
+import com.rentride.bookingservice.dto.BookingLifecycleResponse;
 import com.rentride.bookingservice.dto.BookingResponse;
+import com.rentride.bookingservice.dto.ReturnCondition;
+import com.rentride.bookingservice.dto.VehiclePickupRequest;
+import com.rentride.bookingservice.dto.VehicleReturnRequest;
 import com.rentride.bookingservice.dto.external.VehicleResponseDto;
 import com.rentride.bookingservice.entity.Booking;
 import com.rentride.bookingservice.entity.BookingStatus;
 import com.rentride.bookingservice.exception.BookingConflictException;
 import com.rentride.bookingservice.exception.BookingNotFoundException;
 import com.rentride.bookingservice.exception.InvalidBookingDatesException;
+import com.rentride.bookingservice.exception.InvalidBookingStateException;
 import com.rentride.bookingservice.exception.UnauthorizedBookingAccessException;
+import com.rentride.bookingservice.exception.UnauthorizedProviderException;
+import com.rentride.bookingservice.exception.VehicleNotAvailableException;
 import com.rentride.bookingservice.exception.VehicleUnavailableException;
 import com.rentride.bookingservice.repository.BookingRepository;
 import com.rentride.bookingservice.util.BookingReferenceGenerator;
@@ -20,11 +27,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
  * Implementation of {@link BookingService} handling reservation creation, cost calculations,
- * OpenFeign inter-service vehicle status locking, and conflict validation.
+ * OpenFeign inter-service vehicle status locking, and lifecycle status transitions (pickup & return).
  */
 @Slf4j
 @Service
@@ -102,6 +110,7 @@ public class BookingServiceImpl implements BookingService {
                     .totalCost(totalCost)
                     .status(BookingStatus.PENDING_PAYMENT)
                     .pickupNotes(request.getPickupNotes())
+                    .additionalCharges(BigDecimal.ZERO)
                     .build();
 
             savedBooking = bookingRepository.save(booking);
@@ -168,6 +177,147 @@ public class BookingServiceImpl implements BookingService {
                 .toList();
     }
 
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public BookingResponse confirmBooking(Long bookingId) {
+        log.info("Confirming booking reservation: bookingId={}", bookingId);
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new BookingNotFoundException(bookingId));
+
+        if (booking.getStatus() != BookingStatus.PENDING_PAYMENT) {
+            log.warn("Invalid confirm state transition: bookingId={}, currentStatus={}", bookingId, booking.getStatus());
+            throw new InvalidBookingStateException(String.format(
+                    "Booking %s cannot be confirmed: current status is %s (must be PENDING_PAYMENT)",
+                    booking.getBookingReference(), booking.getStatus()));
+        }
+
+        booking.setStatus(BookingStatus.CONFIRMED);
+        Booking saved = bookingRepository.save(booking);
+        log.info("Booking {} successfully transitioned to CONFIRMED", saved.getBookingReference());
+
+        VehicleResponseDto vehicle = null;
+        try {
+            vehicle = vehicleIntegrationService.getVehicleById(saved.getVehicleId());
+        } catch (Exception e) {
+            log.debug("Vehicle lookup omitted during booking confirmation");
+        }
+
+        return mapToResponse(saved, vehicle);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public BookingLifecycleResponse recordVehiclePickup(Long bookingId, Long providerId, VehiclePickupRequest request) {
+        log.info("Recording vehicle pickup: bookingId={}, providerId={}, odometer={}, fuel={}%",
+                bookingId, providerId, request.getOdometerReading(), request.getFuelLevelPercent());
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new BookingNotFoundException(bookingId));
+
+        // 1. Verify provider authorization
+        if (!booking.getProviderId().equals(providerId)) {
+            log.warn("Unauthorized pickup attempt: bookingId={}, expectedProvider={}, actualProvider={}",
+                    bookingId, booking.getProviderId(), providerId);
+            throw new UnauthorizedProviderException("You do not have permission to manage handovers for booking ID: " + bookingId);
+        }
+
+        // 2. Verify state is CONFIRMED
+        if (booking.getStatus() != BookingStatus.CONFIRMED) {
+            log.warn("Invalid pickup state transition: bookingId={}, currentStatus={}", bookingId, booking.getStatus());
+            throw new InvalidBookingStateException(String.format(
+                    "Vehicle pickup cannot be recorded for booking %s: current status is %s (must be CONFIRMED)",
+                    booking.getBookingReference(), booking.getStatus()));
+        }
+
+        // 3. Update booking status and initial pickup metrics
+        booking.setStatus(BookingStatus.ACTIVE_RENTAL);
+        booking.setActualPickupTime(LocalDateTime.now());
+        booking.setStartOdometer(request.getOdometerReading());
+        booking.setStartFuelPercent(request.getFuelLevelPercent());
+
+        if (request.getHandoverNotes() != null && !request.getHandoverNotes().isBlank()) {
+            String current = booking.getPickupNotes() != null ? booking.getPickupNotes() + " | " : "";
+            booking.setPickupNotes(current + request.getHandoverNotes());
+        }
+
+        // 4. Sync with upstream Vehicle-Service
+        try {
+            vehicleIntegrationService.updateVehicleStatus(
+                    booking.getVehicleId(),
+                    "RENTED",
+                    "Active Rental Handover: " + booking.getBookingReference()
+            );
+        } catch (VehicleNotAvailableException ex) {
+            // Vehicle was already transitioned to RENTED during initial reservation lock
+            log.info("Vehicle ID {} is already marked as RENTED in vehicle-service (idempotent handover)",
+                    booking.getVehicleId());
+        }
+
+        Booking saved = bookingRepository.save(booking);
+        log.info("Booking {} successfully transitioned to ACTIVE_RENTAL", saved.getBookingReference());
+
+        return mapToLifecycleResponse(saved, "RENTED");
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public BookingLifecycleResponse recordVehicleReturn(Long bookingId, Long providerId, VehicleReturnRequest request) {
+        log.info("Recording vehicle return: bookingId={}, providerId={}, condition={}, odometer={}, additionalCharges={}",
+                bookingId, providerId, request.getVehicleCondition(), request.getOdometerReading(), request.getAdditionalCharges());
+
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new BookingNotFoundException(bookingId));
+
+        // 1. Verify provider authorization
+        if (!booking.getProviderId().equals(providerId)) {
+            log.warn("Unauthorized return attempt: bookingId={}, expectedProvider={}, actualProvider={}",
+                    bookingId, booking.getProviderId(), providerId);
+            throw new UnauthorizedProviderException("You do not have permission to manage returns for booking ID: " + bookingId);
+        }
+
+        // 2. Verify state is ACTIVE_RENTAL
+        if (booking.getStatus() != BookingStatus.ACTIVE_RENTAL) {
+            log.warn("Invalid return state transition: bookingId={}, currentStatus={}", bookingId, booking.getStatus());
+            throw new InvalidBookingStateException(String.format(
+                    "Vehicle return cannot be processed for booking %s: current status is %s (must be ACTIVE_RENTAL)",
+                    booking.getBookingReference(), booking.getStatus()));
+        }
+
+        // 3. Update booking status and return metrics
+        booking.setStatus(BookingStatus.COMPLETED);
+        booking.setActualReturnDate(LocalDateTime.now());
+        booking.setEndOdometer(request.getOdometerReading());
+        booking.setEndFuelPercent(request.getFuelLevelPercent());
+
+        BigDecimal extraCharges = request.getAdditionalCharges() != null ? request.getAdditionalCharges() : BigDecimal.ZERO;
+        booking.setAdditionalCharges(extraCharges);
+
+        if (request.getReturnNotes() != null && !request.getReturnNotes().isBlank()) {
+            String current = booking.getReturnNotes() != null ? booking.getReturnNotes() + " | " : "";
+            booking.setReturnNotes(current + request.getReturnNotes());
+        }
+
+        // 4. Determine downstream vehicle status
+        String downstreamStatus;
+        String reason;
+        if (request.getVehicleCondition() == ReturnCondition.GOOD) {
+            downstreamStatus = "AVAILABLE";
+            reason = "Return completed in good condition: " + booking.getBookingReference();
+        } else {
+            downstreamStatus = "MAINTENANCE";
+            reason = "Returned with reported damages / maintenance required: " + booking.getBookingReference();
+        }
+
+        vehicleIntegrationService.updateVehicleStatus(booking.getVehicleId(), downstreamStatus, reason);
+
+        Booking saved = bookingRepository.save(booking);
+        log.info("Booking {} successfully transitioned to COMPLETED. Downstream vehicle status: {}",
+                saved.getBookingReference(), downstreamStatus);
+
+        return mapToLifecycleResponse(saved, downstreamStatus);
+    }
+
     private void validateBookingDates(LocalDate startDate, LocalDate endDate) {
         if (startDate == null || endDate == null) {
             throw new InvalidBookingDatesException("Start date and end date are required");
@@ -217,5 +367,30 @@ public class BookingServiceImpl implements BookingService {
                 .updatedAt(booking.getUpdatedAt())
                 .build();
     }
-}
 
+    private BookingLifecycleResponse mapToLifecycleResponse(Booking booking, String vehicleStatusSummary) {
+        BigDecimal additional = booking.getAdditionalCharges() != null ? booking.getAdditionalCharges() : BigDecimal.ZERO;
+        BigDecimal finalAmountPaid = booking.getTotalCost().add(additional);
+
+        return BookingLifecycleResponse.builder()
+                .id(booking.getId())
+                .bookingReference(booking.getBookingReference())
+                .customerId(booking.getCustomerId())
+                .providerId(booking.getProviderId())
+                .vehicleId(booking.getVehicleId())
+                .status(booking.getStatus())
+                .actualPickupTime(booking.getActualPickupTime())
+                .actualReturnDate(booking.getActualReturnDate())
+                .vehicleStatusSummary(vehicleStatusSummary)
+                .startOdometer(booking.getStartOdometer())
+                .endOdometer(booking.getEndOdometer())
+                .startFuelPercent(booking.getStartFuelPercent())
+                .endFuelPercent(booking.getEndFuelPercent())
+                .totalCost(booking.getTotalCost())
+                .additionalCharges(additional)
+                .finalAmountPaid(finalAmountPaid)
+                .pickupNotes(booking.getPickupNotes())
+                .returnNotes(booking.getReturnNotes())
+                .build();
+    }
+}

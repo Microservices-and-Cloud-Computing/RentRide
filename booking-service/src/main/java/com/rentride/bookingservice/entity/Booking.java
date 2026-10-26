@@ -27,7 +27,7 @@ import java.time.LocalDateTime;
  * JPA entity representing a customer vehicle reservation agreement in the RentRide platform.
  *
  * <p>Tracks reservation lifecycle states, rental duration, daily rates, calculated costs,
- * provider ownership, and customer association. Maps to table {@code bookings}.
+ * provider ownership, customer association, and vehicle pickup/return metrics.
  */
 @Entity
 @Table(
@@ -144,9 +144,45 @@ public class Booking extends BaseEntity {
     private String returnNotes;
 
     /**
+     * Actual timestamp when the vehicle was handed over to the customer.
+     */
+    @Column(name = "actual_pickup_time")
+    private LocalDateTime actualPickupTime;
+
+    /**
      * Actual timestamp when the vehicle was handed back by the customer.
      */
     @Column(name = "actual_return_date")
     private LocalDateTime actualReturnDate;
-}
 
+    /**
+     * Initial vehicle odometer reading recorded at pickup.
+     */
+    @Column(name = "start_odometer")
+    private Double startOdometer;
+
+    /**
+     * Final vehicle odometer reading recorded upon return.
+     */
+    @Column(name = "end_odometer")
+    private Double endOdometer;
+
+    /**
+     * Initial vehicle fuel percentage (0-100) recorded at pickup.
+     */
+    @Column(name = "start_fuel_percent")
+    private Integer startFuelPercent;
+
+    /**
+     * Final vehicle fuel percentage (0-100) recorded upon return.
+     */
+    @Column(name = "end_fuel_percent")
+    private Integer endFuelPercent;
+
+    /**
+     * Additional fees assessed upon return (e.g., late return, fuel shortfall, damage fees).
+     */
+    @Builder.Default
+    @Column(name = "additional_charges", precision = 10, scale = 2)
+    private BigDecimal additionalCharges = BigDecimal.ZERO;
+}

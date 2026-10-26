@@ -1,7 +1,10 @@
 package com.rentride.bookingservice.service;
 
 import com.rentride.bookingservice.dto.BookingCreateRequest;
+import com.rentride.bookingservice.dto.BookingLifecycleResponse;
 import com.rentride.bookingservice.dto.BookingResponse;
+import com.rentride.bookingservice.dto.VehiclePickupRequest;
+import com.rentride.bookingservice.dto.VehicleReturnRequest;
 
 import java.util.List;
 
@@ -36,5 +39,33 @@ public interface BookingService {
      * @return list of BookingResponse DTOs
      */
     List<BookingResponse> getBookingsByCustomerId(Long customerId);
-}
 
+    /**
+     * Confirms a booking reservation upon payment verification, advancing status from PENDING_PAYMENT to CONFIRMED.
+     *
+     * @param bookingId booking ID
+     * @return BookingResponse with CONFIRMED status
+     */
+    BookingResponse confirmBooking(Long bookingId);
+
+    /**
+     * Records customer vehicle pickup handover, moving reservation from CONFIRMED to ACTIVE_RENTAL.
+     *
+     * @param bookingId booking ID
+     * @param providerId ID of the vehicle owner / provider performing the handover
+     * @param request handover statistics (odometer, fuel, notes)
+     * @return BookingLifecycleResponse with updated status and pickup metrics
+     */
+    BookingLifecycleResponse recordVehiclePickup(Long bookingId, Long providerId, VehiclePickupRequest request);
+
+    /**
+     * Records customer vehicle return inspection, moving reservation from ACTIVE_RENTAL to COMPLETED
+     * and synchronizing upstream vehicle status to AVAILABLE or MAINTENANCE.
+     *
+     * @param bookingId booking ID
+     * @param providerId ID of the vehicle owner / provider receiving the return
+     * @param request return statistics, condition, notes, and any additional charges
+     * @return BookingLifecycleResponse with finalized rental costs and completion status
+     */
+    BookingLifecycleResponse recordVehicleReturn(Long bookingId, Long providerId, VehicleReturnRequest request);
+}
