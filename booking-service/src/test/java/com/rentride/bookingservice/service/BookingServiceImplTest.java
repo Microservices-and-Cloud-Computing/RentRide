@@ -1,14 +1,20 @@
 package com.rentride.bookingservice.service;
 
 import com.rentride.bookingservice.dto.BookingCreateRequest;
+import com.rentride.bookingservice.dto.BookingLifecycleResponse;
 import com.rentride.bookingservice.dto.BookingResponse;
+import com.rentride.bookingservice.dto.ReturnCondition;
+import com.rentride.bookingservice.dto.VehiclePickupRequest;
+import com.rentride.bookingservice.dto.VehicleReturnRequest;
 import com.rentride.bookingservice.dto.external.VehicleResponseDto;
 import com.rentride.bookingservice.entity.Booking;
 import com.rentride.bookingservice.entity.BookingStatus;
 import com.rentride.bookingservice.exception.BookingConflictException;
 import com.rentride.bookingservice.exception.BookingNotFoundException;
 import com.rentride.bookingservice.exception.InvalidBookingDatesException;
+import com.rentride.bookingservice.exception.InvalidBookingStateException;
 import com.rentride.bookingservice.exception.UnauthorizedBookingAccessException;
+import com.rentride.bookingservice.exception.UnauthorizedProviderException;
 import com.rentride.bookingservice.exception.VehicleUnavailableException;
 import com.rentride.bookingservice.repository.BookingRepository;
 import com.rentride.bookingservice.util.BookingReferenceGenerator;
@@ -23,7 +29,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -193,9 +198,7 @@ class BookingServiceImplTest {
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("DB Connection Dropped");
 
-        // First locked to RENTED
         verify(vehicleIntegrationService).updateVehicleStatus(eq(1L), eq("RENTED"), any());
-        // Then compensated back to AVAILABLE
         verify(vehicleIntegrationService).updateVehicleStatus(eq(1L), eq("AVAILABLE"), any());
     }
 
@@ -301,5 +304,224 @@ class BookingServiceImplTest {
         assertThat(responses).hasSize(1);
         assertThat(responses.get(0).getCustomerId()).isEqualTo(50L);
     }
-}
 
+    @Test
+    @DisplayName("Should confirm booking successfully when status is PENDING_PAYMENT")
+    void testConfirmBooking_Success() {
+        Booking booking = Booking.builder()
+                .id(200L)
+                .bookingReference("RR-BK-20261101-CONF01")
+                .customerId(10L)
+                .providerId(2L)
+                .vehicleId(1L)
+                .status(BookingStatus.PENDING_PAYMENT)
+                .startDate(LocalDate.now().plusDays(1))
+                .endDate(LocalDate.now().plusDays(3))
+                .totalDays(2)
+                .dailyRate(new BigDecimal("10000.00"))
+                .totalCost(new BigDecimal("20000.00"))
+                .build();
+
+        when(bookingRepository.findById(200L)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingResponse response = bookingService.confirmBooking(200L);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(BookingStatus.CONFIRMED);
+        verify(bookingRepository).save(any(Booking.class));
+    }
+
+    @Test
+    @DisplayName("Should throw InvalidBookingStateException when confirming booking that is not PENDING_PAYMENT")
+    void testConfirmBooking_InvalidStatus_ThrowsException() {
+        Booking booking = Booking.builder()
+                .id(200L)
+                .status(BookingStatus.ACTIVE_RENTAL)
+                .build();
+
+        when(bookingRepository.findById(200L)).thenReturn(Optional.of(booking));
+
+        assertThatThrownBy(() -> bookingService.confirmBooking(200L))
+                .isInstanceOf(InvalidBookingStateException.class)
+                .hasMessageContaining("must be PENDING_PAYMENT");
+    }
+
+    @Test
+    @DisplayName("Should record vehicle pickup successfully when booking is CONFIRMED")
+    void testRecordVehiclePickup_Success() {
+        Booking booking = Booking.builder()
+                .id(200L)
+                .bookingReference("RR-BK-20261101-PICK01")
+                .customerId(10L)
+                .providerId(2L)
+                .vehicleId(1L)
+                .status(BookingStatus.CONFIRMED)
+                .totalCost(new BigDecimal("20000.00"))
+                .build();
+
+        VehiclePickupRequest request = VehiclePickupRequest.builder()
+                .odometerReading(45200.0)
+                .fuelLevelPercent(100)
+                .handoverNotes("Vehicle handed over clean with spare tire")
+                .build();
+
+        when(bookingRepository.findById(200L)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingLifecycleResponse response = bookingService.recordVehiclePickup(200L, 2L, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(BookingStatus.ACTIVE_RENTAL);
+        assertThat(response.getStartOdometer()).isEqualTo(45200.0);
+        assertThat(response.getStartFuelPercent()).isEqualTo(100);
+        assertThat(response.getActualPickupTime()).isNotNull();
+        assertThat(response.getVehicleStatusSummary()).isEqualTo("RENTED");
+
+        verify(vehicleIntegrationService).updateVehicleStatus(eq(1L), eq("RENTED"), any());
+        verify(bookingRepository).save(any(Booking.class));
+    }
+
+    @Test
+    @DisplayName("Should throw InvalidBookingStateException when attempting pickup on non-CONFIRMED booking")
+    void testRecordVehiclePickup_InvalidStatus_ThrowsException() {
+        Booking booking = Booking.builder()
+                .id(200L)
+                .providerId(2L)
+                .status(BookingStatus.PENDING_PAYMENT)
+                .build();
+
+        VehiclePickupRequest request = VehiclePickupRequest.builder()
+                .odometerReading(45200.0)
+                .fuelLevelPercent(100)
+                .build();
+
+        when(bookingRepository.findById(200L)).thenReturn(Optional.of(booking));
+
+        assertThatThrownBy(() -> bookingService.recordVehiclePickup(200L, 2L, request))
+                .isInstanceOf(InvalidBookingStateException.class)
+                .hasMessageContaining("must be CONFIRMED");
+
+        verify(bookingRepository, never()).save(any());
+        verify(vehicleIntegrationService, never()).updateVehicleStatus(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Should throw UnauthorizedProviderException when wrong provider attempts pickup")
+    void testRecordVehiclePickup_UnauthorizedProvider_ThrowsException() {
+        Booking booking = Booking.builder()
+                .id(200L)
+                .providerId(2L)
+                .status(BookingStatus.CONFIRMED)
+                .build();
+
+        VehiclePickupRequest request = VehiclePickupRequest.builder()
+                .odometerReading(45200.0)
+                .fuelLevelPercent(100)
+                .build();
+
+        when(bookingRepository.findById(200L)).thenReturn(Optional.of(booking));
+
+        assertThatThrownBy(() -> bookingService.recordVehiclePickup(200L, 99L, request))
+                .isInstanceOf(UnauthorizedProviderException.class)
+                .hasMessageContaining("do not have permission");
+    }
+
+    @Test
+    @DisplayName("Should record vehicle return in GOOD condition, setting vehicle AVAILABLE")
+    void testRecordVehicleReturn_GoodCondition_SetsAvailable() {
+        Booking booking = Booking.builder()
+                .id(200L)
+                .bookingReference("RR-BK-20261101-RET01")
+                .customerId(10L)
+                .providerId(2L)
+                .vehicleId(1L)
+                .status(BookingStatus.ACTIVE_RENTAL)
+                .totalCost(new BigDecimal("20000.00"))
+                .build();
+
+        VehicleReturnRequest request = VehicleReturnRequest.builder()
+                .odometerReading(45800.0)
+                .fuelLevelPercent(100)
+                .vehicleCondition(ReturnCondition.GOOD)
+                .returnNotes("Clean return, no issues")
+                .additionalCharges(BigDecimal.ZERO)
+                .build();
+
+        when(bookingRepository.findById(200L)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingLifecycleResponse response = bookingService.recordVehicleReturn(200L, 2L, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(BookingStatus.COMPLETED);
+        assertThat(response.getEndOdometer()).isEqualTo(45800.0);
+        assertThat(response.getEndFuelPercent()).isEqualTo(100);
+        assertThat(response.getVehicleStatusSummary()).isEqualTo("AVAILABLE");
+        assertThat(response.getFinalAmountPaid()).isEqualByComparingTo(new BigDecimal("20000.00"));
+
+        verify(vehicleIntegrationService).updateVehicleStatus(eq(1L), eq("AVAILABLE"), any());
+        verify(bookingRepository).save(any(Booking.class));
+    }
+
+    @Test
+    @DisplayName("Should record vehicle return with DAMAGES, setting vehicle MAINTENANCE and adding extra fees")
+    void testRecordVehicleReturn_DamagedCondition_SetsMaintenance() {
+        Booking booking = Booking.builder()
+                .id(200L)
+                .bookingReference("RR-BK-20261101-RET02")
+                .customerId(10L)
+                .providerId(2L)
+                .vehicleId(1L)
+                .status(BookingStatus.ACTIVE_RENTAL)
+                .totalCost(new BigDecimal("20000.00"))
+                .build();
+
+        VehicleReturnRequest request = VehicleReturnRequest.builder()
+                .odometerReading(45800.0)
+                .fuelLevelPercent(80)
+                .vehicleCondition(ReturnCondition.DAMAGED)
+                .returnNotes("Rear bumper scratch and low fuel")
+                .additionalCharges(new BigDecimal("15000.00"))
+                .build();
+
+        when(bookingRepository.findById(200L)).thenReturn(Optional.of(booking));
+        when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        BookingLifecycleResponse response = bookingService.recordVehicleReturn(200L, 2L, request);
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo(BookingStatus.COMPLETED);
+        assertThat(response.getVehicleStatusSummary()).isEqualTo("MAINTENANCE");
+        assertThat(response.getAdditionalCharges()).isEqualByComparingTo(new BigDecimal("15000.00"));
+        assertThat(response.getFinalAmountPaid()).isEqualByComparingTo(new BigDecimal("35000.00"));
+
+        verify(vehicleIntegrationService).updateVehicleStatus(eq(1L), eq("MAINTENANCE"), any());
+        verify(bookingRepository).save(any(Booking.class));
+    }
+
+    @Test
+    @DisplayName("Should throw InvalidBookingStateException when attempting return on non-ACTIVE_RENTAL booking")
+    void testRecordVehicleReturn_InvalidStatus_ThrowsException() {
+        Booking booking = Booking.builder()
+                .id(200L)
+                .providerId(2L)
+                .status(BookingStatus.CONFIRMED)
+                .build();
+
+        VehicleReturnRequest request = VehicleReturnRequest.builder()
+                .odometerReading(45800.0)
+                .fuelLevelPercent(100)
+                .vehicleCondition(ReturnCondition.GOOD)
+                .build();
+
+        when(bookingRepository.findById(200L)).thenReturn(Optional.of(booking));
+
+        assertThatThrownBy(() -> bookingService.recordVehicleReturn(200L, 2L, request))
+                .isInstanceOf(InvalidBookingStateException.class)
+                .hasMessageContaining("must be ACTIVE_RENTAL");
+
+        verify(bookingRepository, never()).save(any());
+        verify(vehicleIntegrationService, never()).updateVehicleStatus(any(), any(), any());
+    }
+}

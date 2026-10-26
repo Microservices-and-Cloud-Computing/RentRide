@@ -1,7 +1,10 @@
 package com.rentride.bookingservice.controller;
 
 import com.rentride.bookingservice.dto.BookingCreateRequest;
+import com.rentride.bookingservice.dto.BookingLifecycleResponse;
 import com.rentride.bookingservice.dto.BookingResponse;
+import com.rentride.bookingservice.dto.VehiclePickupRequest;
+import com.rentride.bookingservice.dto.VehicleReturnRequest;
 import com.rentride.bookingservice.service.BookingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * REST controller for customer vehicle reservation operations.
+ * REST controller for customer vehicle reservation operations and provider handover/return lifecycles.
  */
 @Slf4j
 @RestController
@@ -78,5 +81,54 @@ public class BookingController {
         List<BookingResponse> responses = bookingService.getBookingsByCustomerId(customerId);
         return ResponseEntity.ok(responses);
     }
-}
 
+    /**
+     * Confirms a reservation upon payment verification, advancing status from PENDING_PAYMENT to CONFIRMED.
+     *
+     * @param id primary booking ID
+     * @return 200 OK with BookingResponse
+     */
+    @PostMapping("/{id:[0-9]+}/confirm")
+    public ResponseEntity<BookingResponse> confirmBooking(@PathVariable("id") Long id) {
+        log.info("REST POST /api/v1/bookings/{}/confirm: Advancing status to CONFIRMED", id);
+        BookingResponse response = bookingService.confirmBooking(id);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Records customer vehicle pickup / handover, advancing status from CONFIRMED to ACTIVE_RENTAL.
+     *
+     * @param id primary booking ID
+     * @param providerId ID of the vehicle provider performing the handover
+     * @param request pickup statistics (odometer, fuel level, notes)
+     * @return 200 OK with BookingLifecycleResponse
+     */
+    @PostMapping("/{id:[0-9]+}/pickup")
+    public ResponseEntity<BookingLifecycleResponse> recordVehiclePickup(
+            @PathVariable("id") Long id,
+            @RequestHeader("X-User-Id") Long providerId,
+            @Valid @RequestBody VehiclePickupRequest request) {
+        log.info("REST POST /api/v1/bookings/{}/pickup: providerId={}", id, providerId);
+        BookingLifecycleResponse response = bookingService.recordVehiclePickup(id, providerId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Records customer vehicle return inspection, advancing status from ACTIVE_RENTAL to COMPLETED
+     * and synchronizing upstream vehicle status to AVAILABLE or MAINTENANCE.
+     *
+     * @param id primary booking ID
+     * @param providerId ID of the vehicle provider receiving the return
+     * @param request return statistics, condition, notes, and any additional charges
+     * @return 200 OK with BookingLifecycleResponse
+     */
+    @PostMapping("/{id:[0-9]+}/return")
+    public ResponseEntity<BookingLifecycleResponse> recordVehicleReturn(
+            @PathVariable("id") Long id,
+            @RequestHeader("X-User-Id") Long providerId,
+            @Valid @RequestBody VehicleReturnRequest request) {
+        log.info("REST POST /api/v1/bookings/{}/return: providerId={}", id, providerId);
+        BookingLifecycleResponse response = bookingService.recordVehicleReturn(id, providerId, request);
+        return ResponseEntity.ok(response);
+    }
+}

@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BookingEntityTest {
 
     @Test
-    @DisplayName("Should default status to PENDING_PAYMENT when built via Lombok Builder")
+    @DisplayName("Should default status to PENDING_PAYMENT and additionalCharges to ZERO when built via Lombok Builder")
     void shouldDefaultStatusToPendingPayment() {
         Booking booking = Booking.builder()
                 .bookingReference("RR-BK-20261025-001122")
@@ -30,10 +30,11 @@ class BookingEntityTest {
                 .build();
 
         assertThat(booking.getStatus()).isEqualTo(BookingStatus.PENDING_PAYMENT);
+        assertThat(booking.getAdditionalCharges()).isEqualByComparingTo(BigDecimal.ZERO);
     }
 
     @Test
-    @DisplayName("Should correctly set and retrieve all booking properties")
+    @DisplayName("Should correctly set and retrieve all booking properties including pickup and return metrics")
     void shouldSetAndGetProperties() {
         Booking booking = new Booking();
         booking.setId(10L);
@@ -49,8 +50,15 @@ class BookingEntityTest {
         booking.setStatus(BookingStatus.ACTIVE_RENTAL);
         booking.setPickupNotes("Key handed over with full fuel");
         booking.setReturnNotes("Vehicle checked, no damages");
+        LocalDateTime pickupTime = LocalDateTime.of(2026, 11, 1, 10, 0);
         LocalDateTime returnTime = LocalDateTime.of(2026, 11, 5, 17, 30);
+        booking.setActualPickupTime(pickupTime);
         booking.setActualReturnDate(returnTime);
+        booking.setStartOdometer(45000.0);
+        booking.setEndOdometer(45650.0);
+        booking.setStartFuelPercent(100);
+        booking.setEndFuelPercent(95);
+        booking.setAdditionalCharges(new BigDecimal("1500.00"));
 
         assertThat(booking.getId()).isEqualTo(10L);
         assertThat(booking.getBookingReference()).isEqualTo("RR-BK-REF-10");
@@ -65,7 +73,13 @@ class BookingEntityTest {
         assertThat(booking.getStatus()).isEqualTo(BookingStatus.ACTIVE_RENTAL);
         assertThat(booking.getPickupNotes()).isEqualTo("Key handed over with full fuel");
         assertThat(booking.getReturnNotes()).isEqualTo("Vehicle checked, no damages");
+        assertThat(booking.getActualPickupTime()).isEqualTo(pickupTime);
         assertThat(booking.getActualReturnDate()).isEqualTo(returnTime);
+        assertThat(booking.getStartOdometer()).isEqualTo(45000.0);
+        assertThat(booking.getEndOdometer()).isEqualTo(45650.0);
+        assertThat(booking.getStartFuelPercent()).isEqualTo(100);
+        assertThat(booking.getEndFuelPercent()).isEqualTo(95);
+        assertThat(booking.getAdditionalCharges()).isEqualByComparingTo("1500.00");
     }
 
     @Test
@@ -82,4 +96,3 @@ class BookingEntityTest {
         );
     }
 }
-
