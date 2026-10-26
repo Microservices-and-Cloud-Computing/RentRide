@@ -244,6 +244,32 @@ class BookingControllerTest {
 
     @Test
     @DisplayName("POST /api/v1/bookings/{id}/confirm: Should return 200 OK with confirmed BookingResponse")
+    void testGetBookingsByCustomerId_Success_Returns200() throws Exception {
+        BookingResponse response = BookingResponse.builder()
+                .id(100L)
+                .bookingReference("RR-BK-20261026-TEST01")
+                .customerId(50L)
+                .providerId(10L)
+                .vehicleId(1L)
+                .startDate(LocalDate.now().plusDays(2))
+                .endDate(LocalDate.now().plusDays(5))
+                .totalDays(3)
+                .dailyRate(new BigDecimal("8000.00"))
+                .totalCost(new BigDecimal("24000.00"))
+                .status(BookingStatus.CONFIRMED)
+                .build();
+
+        when(bookingService.getBookingsByCustomerId(50L)).thenReturn(List.of(response));
+
+        mockMvc.perform(get("/api/v1/bookings/customer/50"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].id").value(100))
+                .andExpect(jsonPath("$[0].bookingReference").value("RR-BK-20261026-TEST01"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/bookings/{id}/confirm: Should return 200 OK with confirmed BookingResponse")
     void testConfirmBooking_Success_Returns200() throws Exception {
         BookingResponse response = BookingResponse.builder()
                 .id(100L)
