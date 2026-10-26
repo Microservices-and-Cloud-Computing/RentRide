@@ -48,9 +48,8 @@ public class PaymentController {
         PaymentResponse response = paymentService.processPayment(customerId, request);
 
         if (response.getStatus() == PaymentStatus.FAILED) {
-            log.warn("REST /checkout resulted in FAILED payment: txnRef={}, reason={}",
+            log.warn("REST /checkout completed with FAILED payment: txnRef={}, reason={}",
                     response.getTransactionReference(), response.getFailureReason());
-            return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(response);
         }
 
         return ResponseEntity.ok(response);

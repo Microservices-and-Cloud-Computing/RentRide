@@ -86,8 +86,8 @@ class PaymentControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/v1/payments/checkout: Declined transaction returns HTTP 402 Payment Required")
-    void testCheckout_Declined_Returns402() throws Exception {
+    @DisplayName("POST /api/v1/payments/checkout: Declined transaction returns HTTP 200 OK with FAILED status")
+    void testCheckout_Declined_Returns200WithFailedStatus() throws Exception {
         PaymentProcessRequest request = PaymentProcessRequest.builder()
                 .bookingId(10L)
                 .amount(new BigDecimal("15000.00"))
@@ -118,7 +118,7 @@ class PaymentControllerTest {
                         .header("X-User-Id", 5L)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isPaymentRequired())
+                .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.failureReason").value("Insufficient funds"));
     }
