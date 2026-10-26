@@ -109,6 +109,13 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Spring Cloud Contract WireMock for HTTP mock verification -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-contract-wiremock</artifactId>
+            <scope>test</scope>
+        </dependency>
+
     </dependencies>
 
     <!-- ── Build ─────────────────────────────────────────────────────────────── -->

@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestBody;
  */
 @FeignClient(
         name = "booking-service",
+        url = "${booking-service.url:}",
         configuration = FeignConfig.class,
         fallback = BookingServiceClientFallback.class
 )
