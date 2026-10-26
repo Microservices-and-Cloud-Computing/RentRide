@@ -2,6 +2,7 @@ package com.rentride.bookingservice.service;
 
 import com.rentride.bookingservice.dto.BookingCreateRequest;
 import com.rentride.bookingservice.dto.BookingLifecycleResponse;
+import com.rentride.bookingservice.dto.BookingPaymentCallbackRequest;
 import com.rentride.bookingservice.dto.BookingResponse;
 import com.rentride.bookingservice.dto.VehiclePickupRequest;
 import com.rentride.bookingservice.dto.VehicleReturnRequest;
@@ -49,6 +50,16 @@ public interface BookingService {
     BookingResponse confirmBooking(Long bookingId);
 
     /**
+     * Processes payment settlement callback from payment-service.
+     * Advances status from PENDING_PAYMENT to CONFIRMED on SUCCESS.
+     *
+     * @param id booking primary key ID
+     * @param request payment callback parameters
+     * @return updated BookingResponse
+     */
+    BookingResponse updatePaymentStatus(Long id, BookingPaymentCallbackRequest request);
+
+    /**
      * Records customer vehicle pickup handover, moving reservation from CONFIRMED to ACTIVE_RENTAL.
      *
      * @param bookingId booking ID
@@ -59,13 +70,12 @@ public interface BookingService {
     BookingLifecycleResponse recordVehiclePickup(Long bookingId, Long providerId, VehiclePickupRequest request);
 
     /**
-     * Records customer vehicle return inspection, moving reservation from ACTIVE_RENTAL to COMPLETED
-     * and synchronizing upstream vehicle status to AVAILABLE or MAINTENANCE.
+     * Records customer vehicle return inspection, transitioning from ACTIVE_RENTAL to COMPLETED.
      *
      * @param bookingId booking ID
      * @param providerId ID of the vehicle owner / provider receiving the return
-     * @param request return statistics, condition, notes, and any additional charges
-     * @return BookingLifecycleResponse with finalized rental costs and completion status
+     * @param request return metrics (odometer, fuel, condition notes, additional charges)
+     * @return BookingLifecycleResponse with completed rental details
      */
     BookingLifecycleResponse recordVehicleReturn(Long bookingId, Long providerId, VehicleReturnRequest request);
 }

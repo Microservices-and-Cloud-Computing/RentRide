@@ -2,6 +2,7 @@ package com.rentride.bookingservice.controller;
 
 import com.rentride.bookingservice.dto.BookingCreateRequest;
 import com.rentride.bookingservice.dto.BookingLifecycleResponse;
+import com.rentride.bookingservice.dto.BookingPaymentCallbackRequest;
 import com.rentride.bookingservice.dto.BookingResponse;
 import com.rentride.bookingservice.dto.VehiclePickupRequest;
 import com.rentride.bookingservice.dto.VehicleReturnRequest;
@@ -12,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -100,6 +102,24 @@ public class BookingController {
     public ResponseEntity<BookingResponse> confirmBooking(@PathVariable("id") Long id) {
         log.info("REST POST /api/v1/bookings/{}/confirm: Advancing status to CONFIRMED", id);
         BookingResponse response = bookingService.confirmBooking(id);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * RPC payment settlement callback from payment-service.
+     * Advances booking reservation status from PENDING_PAYMENT to CONFIRMED.
+     *
+     * @param id booking primary key ID
+     * @param request payment callback parameters
+     * @return 200 OK with updated BookingResponse
+     */
+    @PatchMapping("/{id:[0-9]+}/payment-status")
+    public ResponseEntity<BookingResponse> updatePaymentStatus(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody BookingPaymentCallbackRequest request) {
+        log.info("REST PATCH /api/v1/bookings/{}/payment-status: txnRef={}, status={}, amount={}",
+                id, request.getTransactionReference(), request.getPaymentStatus(), request.getPaidAmount());
+        BookingResponse response = bookingService.updatePaymentStatus(id, request);
         return ResponseEntity.ok(response);
     }
 
