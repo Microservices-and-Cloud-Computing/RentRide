@@ -74,6 +74,14 @@ public class BookingController {
      * @param customerId ID of the authenticated customer injected by API Gateway
      * @return 200 OK with list of BookingResponse
      */
+    @GetMapping("/customer/{customerId:[0-9]+}")
+    public ResponseEntity<List<BookingResponse>> getBookingsByCustomerId(
+            @PathVariable("customerId") Long customerId) {
+        log.info("REST GET /api/v1/bookings/customer/{}: customerId={}", customerId, customerId);
+        List<BookingResponse> responses = bookingService.getBookingsByCustomerId(customerId);
+        return ResponseEntity.ok(responses);
+    }
+
     @GetMapping("/customer/my-bookings")
     public ResponseEntity<List<BookingResponse>> getMyBookings(
             @RequestHeader("X-User-Id") Long customerId) {

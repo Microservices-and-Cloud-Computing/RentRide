@@ -82,7 +82,7 @@ class BookingServiceImplTest {
 
     @Test
     @DisplayName("Should successfully create booking and lock vehicle via Feign")
-    void testCreateBooking_Success() {
+    void createBooking_Success() {
         when(vehicleIntegrationService.getVehicleById(1L)).thenReturn(availableVehicle);
         when(bookingRepository.existsByVehicleIdAndStatusInAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
                 eq(1L), anyList(), eq(validRequest.getEndDate()), eq(validRequest.getStartDate())
@@ -123,7 +123,7 @@ class BookingServiceImplTest {
 
     @Test
     @DisplayName("Should throw VehicleUnavailableException when vehicle is not AVAILABLE")
-    void testCreateBooking_VehicleUnavailable_ThrowsException() {
+    void createBooking_VehicleUnavailable_ThrowsConflict() {
         VehicleResponseDto rentedVehicle = VehicleResponseDto.builder()
                 .id(1L)
                 .status("RENTED")
@@ -142,7 +142,7 @@ class BookingServiceImplTest {
 
     @Test
     @DisplayName("Should throw BookingConflictException when overlapping reservation exists")
-    void testCreateBooking_BookingConflict_ThrowsException() {
+    void createBooking_OverlappingDates_ThrowsBookingConflictException() {
         when(vehicleIntegrationService.getVehicleById(1L)).thenReturn(availableVehicle);
         when(bookingRepository.existsByVehicleIdAndStatusInAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
                 eq(1L), anyList(), eq(validRequest.getEndDate()), eq(validRequest.getStartDate())
@@ -349,7 +349,7 @@ class BookingServiceImplTest {
 
     @Test
     @DisplayName("Should record vehicle pickup successfully when booking is CONFIRMED")
-    void testRecordVehiclePickup_Success() {
+    void recordVehiclePickup_ValidConfirmedStatus_TransitionsToActiveRental() {
         Booking booking = Booking.builder()
                 .id(200L)
                 .bookingReference("RR-BK-20261101-PICK01")
@@ -384,7 +384,7 @@ class BookingServiceImplTest {
 
     @Test
     @DisplayName("Should throw InvalidBookingStateException when attempting pickup on non-CONFIRMED booking")
-    void testRecordVehiclePickup_InvalidStatus_ThrowsException() {
+    void recordVehiclePickup_PendingPayment_ThrowsInvalidBookingStateException() {
         Booking booking = Booking.builder()
                 .id(200L)
                 .providerId(2L)
@@ -429,7 +429,7 @@ class BookingServiceImplTest {
 
     @Test
     @DisplayName("Should record vehicle return in GOOD condition, setting vehicle AVAILABLE")
-    void testRecordVehicleReturn_GoodCondition_SetsAvailable() {
+    void recordVehicleReturn_GoodCondition_ReleasesVehicleToAvailable() {
         Booking booking = Booking.builder()
                 .id(200L)
                 .bookingReference("RR-BK-20261101-RET01")
@@ -466,7 +466,7 @@ class BookingServiceImplTest {
 
     @Test
     @DisplayName("Should record vehicle return with DAMAGES, setting vehicle MAINTENANCE and adding extra fees")
-    void testRecordVehicleReturn_DamagedCondition_SetsMaintenance() {
+    void recordVehicleReturn_DamagedCondition_SetsVehicleToMaintenance() {
         Booking booking = Booking.builder()
                 .id(200L)
                 .bookingReference("RR-BK-20261101-RET02")
