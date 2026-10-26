@@ -32,6 +32,7 @@ class RouterValidatorTest {
         assertThat(routerValidator.isSecured(MockServerHttpRequest.get("/actuator/health").build())).isFalse();
         assertThat(routerValidator.isSecured(MockServerHttpRequest.get("/api/v1/vehicles/status").build())).isFalse();
         assertThat(routerValidator.isSecured(MockServerHttpRequest.get("/api/v1/bookings/status").build())).isFalse();
+        assertThat(routerValidator.isSecured(MockServerHttpRequest.get("/api/v1/payments/status").build())).isFalse();
         assertThat(routerValidator.isSecured(MockServerHttpRequest.get("/v3/api-docs").build())).isFalse();
         assertThat(routerValidator.isSecured(MockServerHttpRequest.get("/swagger-ui/index.html").build())).isFalse();
         assertThat(routerValidator.isSecured(MockServerHttpRequest.get("/swagger-ui.html").build())).isFalse();
