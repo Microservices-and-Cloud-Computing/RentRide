@@ -21,6 +21,7 @@ public class RouterValidator {
             "/api/v1/vehicles/status",
             "/api/v1/bookings/status",
             "/api/v1/payments/status",
+            "/api/v1/payments/verify/**",
             "/eureka/**",
             "/actuator/**",
             "/v3/api-docs/**",
