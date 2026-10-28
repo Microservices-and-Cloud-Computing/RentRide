@@ -137,11 +137,11 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- H2 in-memory database — used for local development and tests without requiring PostgreSQL -->
+        <!-- H2 in-memory database — test-only; keeps unit/integration tests free of a running PostgreSQL instance -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>runtime</scope>
+            <scope>test</scope>
         </dependency>
 
     </dependencies>
