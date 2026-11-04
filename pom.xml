@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+             https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.rentride</groupId>
+    <artifactId>rentride-parent</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>RentRide Platform</name>
+    <description>Cloud-Based Vehicle Rental Platform Multi-Module Project</description>
+
+    <modules>
+        <module>service-registry</module>
+        <module>api-gateway</module>
+        <module>user-service</module>
+        <module>vehicle-service</module>
+        <module>booking-service</module>
+        <module>payment-service</module>
+        <module>notification-service</module>
+        <module>rentride-integration-tests</module>
+    </modules>
+
+</project>
+
