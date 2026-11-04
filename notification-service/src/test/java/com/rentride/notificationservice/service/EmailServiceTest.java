@@ -40,9 +40,12 @@ import static org.mockito.Mockito.*;
 @SpringBootTest
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
-        // Disable Actuator mail health check — JavaMailSender is mocked and
-        // MailHealthContributorAutoConfiguration requires a real bean map (non-empty).
-        "management.health.mail.enabled=false"
+        // Disable Actuator health checks that require live infrastructure
+        "management.health.mail.enabled=false",
+        "management.health.rabbit.enabled=false",
+        // Keep RabbitMQ properties valid — no live broker needed for email tests
+        "spring.rabbitmq.host=localhost",
+        "spring.rabbitmq.port=5672"
 })
 class EmailServiceTest {
 
