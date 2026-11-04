@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <title>RentRide Payment Receipt</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background-color:#f4f6f9;padding:32px 0;">
+    <tr>
+      <td align="center">
+
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
+               style="max-width:600px;width:100%;background-color:#ffffff;
+                      border-radius:8px;overflow:hidden;
+                      box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+          <!-- ── HEADER ─────────────────────────────────────────── -->
+          <tr>
+            <td style="background-color:#1a56db;padding:28px 40px;">
+              <span style="font-size:26px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;">
+                🚗 RentRide
+              </span>
+              <p style="margin:4px 0 0;font-size:12px;color:#a3c4fd;letter-spacing:0.5px;">
+                Cloud-Based Vehicle Rental Platform
+              </p>
+            </td>
+          </tr>
+
+          <!-- ── CONTENT ────────────────────────────────────────── -->
+          <tr>
+            <td style="padding:40px 40px 32px;">
+
+              <!-- Status badge -->
+              <div style="display:inline-block;background-color:#ecfdf5;border:1px solid #6ee7b7;
+                          border-radius:20px;padding:6px 16px;margin-bottom:24px;">
+                <span style="font-size:13px;font-weight:600;color:#059669;">💳 Payment Successful</span>
+              </div>
+
+              <!-- Greeting -->
+              <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#111827;">
+                Payment Receipt
+              </h1>
+              <p style="margin:0 0 8px;font-size:16px;color:#374151;line-height:1.6;">
+                Hi <span th:text="${customerName}">Customer</span>,
+              </p>
+              <p style="margin:0 0 28px;font-size:16px;color:#6b7280;line-height:1.6;">
+                Your payment has been received and processed successfully.
+                Please keep this receipt for your records.
+              </p>
+
+              <!-- Transaction reference highlight -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="background-color:#eff6ff;border-left:4px solid #1a56db;
+                            border-radius:4px;margin-bottom:28px;">
+                <tr>
+                  <td style="padding:16px 20px;">
+                    <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#1a56db;
+                               text-transform:uppercase;letter-spacing:0.8px;">
+                      Transaction Reference
+                    </p>
+                    <p style="margin:0;font-size:18px;font-weight:800;color:#1e3a8a;
+                               letter-spacing:1px;" th:text="${transactionReference}">
+                      TXN-XXXXXXXXXXXXXXXX
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Financial breakdown table -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                     style="border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;
+                            margin-bottom:28px;">
+
+                <tr style="background-color:#f9fafb;">
+                  <td style="padding:14px 20px;border-bottom:1px solid #e5e7eb;">
+                    <span style="font-size:12px;font-weight:600;color:#6b7280;
+                                 text-transform:uppercase;letter-spacing:0.6px;">Booking Reference</span>
+                  </td>
+                  <td style="padding:14px 20px;border-bottom:1px solid #e5e7eb;text-align:right;">
+                    <span style="font-size:15px;font-weight:600;color:#111827;"
+                          th:text="${bookingReference}">RR-BK-XXXXXXXX</span>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:14px 20px;border-bottom:1px solid #e5e7eb;">
+                    <span style="font-size:12px;font-weight:600;color:#6b7280;
+                                 text-transform:uppercase;letter-spacing:0.6px;">Payment Method</span>
+                  </td>
+                  <td style="padding:14px 20px;border-bottom:1px solid #e5e7eb;text-align:right;">
+                    <span style="font-size:15px;color:#374151;" th:text="${paymentMethod}">
+                      CREDIT_CARD
+                    </span>
+                  </td>
+                </tr>
+
+                <tr style="background-color:#f9fafb;">
+                  <td style="padding:14px 20px;border-bottom:1px solid #e5e7eb;">
+                    <span style="font-size:12px;font-weight:600;color:#6b7280;
+                                 text-transform:uppercase;letter-spacing:0.6px;">Currency</span>
+                  </td>
+                  <td style="padding:14px 20px;border-bottom:1px solid #e5e7eb;text-align:right;">
+                    <span style="font-size:15px;color:#374151;" th:text="${currency}">LKR</span>
+                  </td>
+                </tr>
+
+                <tr>
+                  <td style="padding:14px 20px;border-bottom:1px solid #e5e7eb;">
+                    <span style="font-size:12px;font-weight:600;color:#6b7280;
+                                 text-transform:uppercase;letter-spacing:0.6px;">Payment Date &amp; Time</span>
+                  </td>
+                  <td style="padding:14px 20px;border-bottom:1px solid #e5e7eb;text-align:right;">
+                    <span style="font-size:15px;color:#374151;" th:text="${paymentTimestamp}">
+                      2026-11-01 10:00
+                    </span>
+                  </td>
+                </tr>
+
+                <!-- Amount row — highlighted -->
+                <tr style="background-color:#eff6ff;">
+                  <td style="padding:16px 20px;">
+                    <span style="font-size:13px;font-weight:700;color:#1a56db;
+                                 text-transform:uppercase;letter-spacing:0.6px;">Amount Paid</span>
+                  </td>
+                  <td style="padding:16px 20px;text-align:right;">
+                    <span style="font-size:22px;font-weight:800;color:#1e3a8a;">
+                      <span th:text="${currency}">LKR</span>
+                      <span th:text="${amount}">25,500.00</span>
+                    </span>
+                  </td>
+                </tr>
+
+              </table>
+
+              <!-- CTA -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0"
+                     style="margin-bottom:28px;">
+                <tr>
+                  <td style="border-radius:6px;background-color:#1a56db;">
+                    <a href="https://www.rentride.com/my-bookings"
+                       style="display:inline-block;padding:14px 28px;font-size:15px;
+                              font-weight:600;color:#ffffff;text-decoration:none;
+                              border-radius:6px;letter-spacing:0.3px;">
+                      View Booking Details →
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin:0;font-size:14px;color:#6b7280;line-height:1.6;">
+                If you have any questions about this charge, please contact our
+                support team with your transaction reference number.
+              </p>
+
+            </td>
+          </tr>
+
+          <!-- ── DIVIDER ────────────────────────────────────────── -->
+          <tr>
+            <td style="padding:0 40px;">
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:0;"/>
+            </td>
+          </tr>
+
+          <!-- ── FOOTER ─────────────────────────────────────────── -->
+          <tr>
+            <td style="padding:24px 40px 32px;background-color:#f9fafb;">
+              <p style="margin:0 0 8px;font-size:13px;color:#6b7280;line-height:1.6;">
+                This is an automated notification from <strong>RentRide Support</strong>.
+                Please do not reply to this email.
+              </p>
+              <p style="margin:0 0 8px;font-size:13px;color:#6b7280;line-height:1.6;">
+                📧
+                <a href="mailto:support@rentride.com" style="color:#1a56db;text-decoration:none;">
+                  support@rentride.com
+                </a>
+                &nbsp;|&nbsp;
+                🌐
+                <a href="https://www.rentride.com" style="color:#1a56db;text-decoration:none;">
+                  www.rentride.com
+                </a>
+              </p>
+              <p style="margin:12px 0 0;font-size:11px;color:#9ca3af;">
+                © 2026 RentRide Pvt Ltd. All rights reserved.<br/>
+                123 Galle Road, Colombo 03, Sri Lanka.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>
+
