@@ -55,6 +55,12 @@ class PaymentServiceImplTest {
     @Mock
     private BookingServiceClient bookingServiceClient;
 
+    @Mock
+    private PaymentEventPublisher paymentEventPublisher;
+
+    @Mock
+    private com.rentride.paymentservice.client.UserServiceClient userServiceClient;
+
     @InjectMocks
     private PaymentServiceImpl paymentService;
 

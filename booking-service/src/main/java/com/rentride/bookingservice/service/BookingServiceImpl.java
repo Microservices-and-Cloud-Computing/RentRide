@@ -25,6 +25,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.rentride.bookingservice.client.UserServiceClient;
+import com.rentride.bookingservice.dto.external.UserResponseDto;
+import com.rentride.bookingservice.event.BookingConfirmedEvent;
+import com.rentride.bookingservice.event.RentalLifecycleEvent;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -50,6 +57,8 @@ public class BookingServiceImpl implements BookingService {
     private final BookingRepository bookingRepository;
     private final VehicleIntegrationService vehicleIntegrationService;
     private final BookingReferenceGenerator bookingReferenceGenerator;
+    private final BookingEventPublisher bookingEventPublisher;
+    private final UserServiceClient userServiceClient;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -204,6 +213,8 @@ public class BookingServiceImpl implements BookingService {
             log.debug("Vehicle lookup omitted during booking confirmation");
         }
 
+        publishBookingConfirmedEvent(saved, vehicle);
+
         return mapToResponse(saved, vehicle);
     }
 
@@ -235,6 +246,8 @@ public class BookingServiceImpl implements BookingService {
             } catch (Exception e) {
                 log.debug("Vehicle lookup omitted during payment callback confirmation");
             }
+            publishBookingConfirmedEvent(saved, vehicle);
+
             return mapToResponse(saved, vehicle);
         } else {
             log.warn("Payment callback indicates payment failure for booking {}: txnRef={}",
@@ -300,6 +313,8 @@ public class BookingServiceImpl implements BookingService {
         Booking saved = bookingRepository.save(booking);
         log.info("Booking {} successfully transitioned to ACTIVE_RENTAL", saved.getBookingReference());
 
+        publishRentalPickupEvent(saved);
+
         return mapToLifecycleResponse(saved, "RENTED");
     }
 
@@ -357,6 +372,8 @@ public class BookingServiceImpl implements BookingService {
         Booking saved = bookingRepository.save(booking);
         log.info("Booking {} successfully transitioned to COMPLETED. Downstream vehicle status: {}",
                 saved.getBookingReference(), downstreamStatus);
+
+        publishRentalReturnEvent(saved, request.getVehicleCondition() != null ? request.getVehicleCondition().name() : "GOOD");
 
         return mapToLifecycleResponse(saved, downstreamStatus);
     }
@@ -435,5 +452,184 @@ public class BookingServiceImpl implements BookingService {
                 .pickupNotes(booking.getPickupNotes())
                 .returnNotes(booking.getReturnNotes())
                 .build();
+    }
+
+    // ── RabbitMQ Event Publication Helpers ──────────────────────────────────
+
+    private void publishBookingConfirmedEvent(Booking booking, VehicleResponseDto vehicle) {
+        if (bookingEventPublisher == null) {
+            return;
+        }
+        try {
+            String customerEmail = resolveCustomerEmail(booking.getCustomerId());
+            String customerName = resolveCustomerName(booking.getCustomerId());
+            String providerEmail = resolveProviderEmail(booking.getProviderId());
+
+            if (vehicle == null) {
+                try {
+                    vehicle = vehicleIntegrationService.getVehicleById(booking.getVehicleId());
+                } catch (Exception e) {
+                    log.debug("Vehicle lookup omitted while constructing BookingConfirmedEvent");
+                }
+            }
+
+            String vehicleName = (vehicle != null && vehicle.getMake() != null)
+                    ? (vehicle.getMake() + " " + vehicle.getModel())
+                    : "RentRide Vehicle";
+
+            String pickupLocation = (vehicle != null && vehicle.getLocation() != null)
+                    ? vehicle.getLocation()
+                    : "Main Branch";
+
+            BookingConfirmedEvent event = BookingConfirmedEvent.builder()
+                    .bookingReference(booking.getBookingReference())
+                    .customerEmail(customerEmail)
+                    .customerName(customerName)
+                    .providerEmail(providerEmail)
+                    .vehicleName(vehicleName)
+                    .startDate(booking.getStartDate())
+                    .endDate(booking.getEndDate())
+                    .totalAmount(booking.getTotalCost())
+                    .pickupLocation(pickupLocation)
+                    .occurredOn(LocalDateTime.now())
+                    .build();
+
+            bookingEventPublisher.publishBookingConfirmed(event);
+        } catch (Exception ex) {
+            log.error("Failed to build or publish BookingConfirmedEvent for ref={}: {}",
+                    booking.getBookingReference(), ex.getMessage(), ex);
+        }
+    }
+
+    private void publishRentalPickupEvent(Booking booking) {
+        if (bookingEventPublisher == null) {
+            return;
+        }
+        try {
+            String customerEmail = resolveCustomerEmail(booking.getCustomerId());
+            String customerName = resolveCustomerName(booking.getCustomerId());
+
+            VehicleResponseDto vehicle = null;
+            try {
+                vehicle = vehicleIntegrationService.getVehicleById(booking.getVehicleId());
+            } catch (Exception e) {
+                log.debug("Vehicle lookup omitted while constructing RentalLifecycleEvent (PICKUP)");
+            }
+
+            String vehicleName = (vehicle != null && vehicle.getMake() != null)
+                    ? (vehicle.getMake() + " " + vehicle.getModel())
+                    : "RentRide Vehicle";
+
+            RentalLifecycleEvent event = RentalLifecycleEvent.builder()
+                    .bookingReference(booking.getBookingReference())
+                    .customerEmail(customerEmail)
+                    .customerName(customerName)
+                    .vehicleName(vehicleName)
+                    .eventType("PICKUP_COMPLETED")
+                    .odometerReading(booking.getStartOdometer())
+                    .vehicleCondition("GOOD")
+                    .additionalCharges(BigDecimal.ZERO)
+                    .occurredOn(booking.getActualPickupTime() != null ? booking.getActualPickupTime() : LocalDateTime.now())
+                    .build();
+
+            bookingEventPublisher.publishRentalPickup(event);
+        } catch (Exception ex) {
+            log.error("Failed to build or publish RentalLifecycleEvent (PICKUP) for ref={}: {}",
+                    booking.getBookingReference(), ex.getMessage(), ex);
+        }
+    }
+
+    private void publishRentalReturnEvent(Booking booking, String condition) {
+        if (bookingEventPublisher == null) {
+            return;
+        }
+        try {
+            String customerEmail = resolveCustomerEmail(booking.getCustomerId());
+            String customerName = resolveCustomerName(booking.getCustomerId());
+
+            VehicleResponseDto vehicle = null;
+            try {
+                vehicle = vehicleIntegrationService.getVehicleById(booking.getVehicleId());
+            } catch (Exception e) {
+                log.debug("Vehicle lookup omitted while constructing RentalLifecycleEvent (RETURN)");
+            }
+
+            String vehicleName = (vehicle != null && vehicle.getMake() != null)
+                    ? (vehicle.getMake() + " " + vehicle.getModel())
+                    : "RentRide Vehicle";
+
+            RentalLifecycleEvent event = RentalLifecycleEvent.builder()
+                    .bookingReference(booking.getBookingReference())
+                    .customerEmail(customerEmail)
+                    .customerName(customerName)
+                    .vehicleName(vehicleName)
+                    .eventType("RETURN_COMPLETED")
+                    .odometerReading(booking.getEndOdometer())
+                    .vehicleCondition(condition)
+                    .additionalCharges(booking.getAdditionalCharges())
+                    .occurredOn(booking.getActualReturnDate() != null ? booking.getActualReturnDate() : LocalDateTime.now())
+                    .build();
+
+            bookingEventPublisher.publishRentalReturn(event);
+        } catch (Exception ex) {
+            log.error("Failed to build or publish RentalLifecycleEvent (RETURN) for ref={}: {}",
+                    booking.getBookingReference(), ex.getMessage(), ex);
+        }
+    }
+
+    private String resolveCustomerEmail(Long customerId) {
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null) {
+                HttpServletRequest request = attrs.getRequest();
+                String headerEmail = request.getHeader("X-User-Email");
+                String headerId = request.getHeader("X-User-Id");
+                if (headerEmail != null && !headerEmail.isBlank() &&
+                        (headerId == null || customerId == null || customerId.toString().equals(headerId))) {
+                    return headerEmail;
+                }
+            }
+        } catch (Exception ignored) {}
+
+        if (userServiceClient != null && customerId != null) {
+            try {
+                UserResponseDto user = userServiceClient.getUserById(customerId);
+                if (user != null && user.getEmail() != null && !user.getEmail().isBlank()) {
+                    return user.getEmail();
+                }
+            } catch (Exception e) {
+                log.warn("UserServiceClient lookup failed for customerId={}: {}", customerId, e.getMessage());
+            }
+        }
+
+        return "customer" + (customerId != null ? customerId : "") + "@rentride.com";
+    }
+
+    private String resolveCustomerName(Long customerId) {
+        if (userServiceClient != null && customerId != null) {
+            try {
+                UserResponseDto user = userServiceClient.getUserById(customerId);
+                if (user != null && user.getFullName() != null && !user.getFullName().isBlank()) {
+                    return user.getFullName();
+                }
+            } catch (Exception e) {
+                log.warn("UserServiceClient lookup failed for customerId={}: {}", customerId, e.getMessage());
+            }
+        }
+        return "Valued Customer";
+    }
+
+    private String resolveProviderEmail(Long providerId) {
+        if (userServiceClient != null && providerId != null) {
+            try {
+                UserResponseDto user = userServiceClient.getUserById(providerId);
+                if (user != null && user.getEmail() != null && !user.getEmail().isBlank()) {
+                    return user.getEmail();
+                }
+            } catch (Exception e) {
+                log.warn("UserServiceClient lookup failed for providerId={}: {}", providerId, e.getMessage());
+            }
+        }
+        return "provider" + (providerId != null ? providerId : "") + "@rentride.com";
     }
 }

@@ -95,6 +95,18 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Spring AMQP / RabbitMQ — event-driven message publication -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-amqp</artifactId>
+        </dependency>
+
+        <!-- Jackson JSR-310 — date/time serialization for domain events -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+
         <!-- H2 in-memory database for fast zero-dependency test execution and local development -->
         <dependency>
             <groupId>com.h2database</groupId>
@@ -106,6 +118,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Spring AMQP test utilities -->
+        <dependency>
+            <groupId>org.springframework.amqp</groupId>
+            <artifactId>spring-rabbit-test</artifactId>
             <scope>test</scope>
         </dependency>
 

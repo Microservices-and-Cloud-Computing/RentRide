@@ -32,6 +32,15 @@ spring:
         jdbc:
           time_zone: UTC
 
+  # -- RabbitMQ / AMQP Producer Configuration --------------------------------
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+
   # -- Spring Cloud OpenFeign -------------------------------------------------
   cloud:
     openfeign:

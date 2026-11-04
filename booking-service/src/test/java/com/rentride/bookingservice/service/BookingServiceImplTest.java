@@ -53,6 +53,12 @@ class BookingServiceImplTest {
     @Mock
     private BookingReferenceGenerator bookingReferenceGenerator;
 
+    @Mock
+    private BookingEventPublisher bookingEventPublisher;
+
+    @Mock
+    private com.rentride.bookingservice.client.UserServiceClient userServiceClient;
+
     @InjectMocks
     private BookingServiceImpl bookingService;
 

@@ -43,6 +43,12 @@ class BookingServiceTest {
     @Mock
     private BookingReferenceGenerator bookingReferenceGenerator;
 
+    @Mock
+    private BookingEventPublisher bookingEventPublisher;
+
+    @Mock
+    private com.rentride.bookingservice.client.UserServiceClient userServiceClient;
+
     @InjectMocks
     private BookingServiceImpl bookingService;
 
@@ -67,8 +73,8 @@ class BookingServiceTest {
     void testCreateBooking_Success() {
         BookingCreateRequest request = BookingCreateRequest.builder()
                 .vehicleId(1L)
-                .startDate(LocalDate.of(2026, 11, 1))
-                .endDate(LocalDate.of(2026, 11, 4))
+                .startDate(LocalDate.now().plusDays(1))
+                .endDate(LocalDate.now().plusDays(4))
                 .pickupNotes("Arriving around 10:00 AM")
                 .build();
 
@@ -138,8 +144,8 @@ class BookingServiceTest {
 
         BookingCreateRequest request = BookingCreateRequest.builder()
                 .vehicleId(1L)
-                .startDate(LocalDate.of(2026, 11, 1))
-                .endDate(LocalDate.of(2026, 11, 4))
+                .startDate(LocalDate.now().plusDays(1))
+                .endDate(LocalDate.now().plusDays(4))
                 .build();
 
         when(vehicleIntegrationService.getVehicleById(1L)).thenReturn(rentedVehicle);
@@ -157,8 +163,8 @@ class BookingServiceTest {
     void testCreateBooking_OverlappingDates_Returns409() {
         BookingCreateRequest request = BookingCreateRequest.builder()
                 .vehicleId(1L)
-                .startDate(LocalDate.of(2026, 11, 3))
-                .endDate(LocalDate.of(2026, 11, 6))
+                .startDate(LocalDate.now().plusDays(2))
+                .endDate(LocalDate.now().plusDays(5))
                 .build();
 
         when(vehicleIntegrationService.getVehicleById(1L)).thenReturn(availableVehicle);

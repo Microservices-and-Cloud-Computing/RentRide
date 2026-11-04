@@ -21,6 +21,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.rentride.paymentservice.client.UserServiceClient;
+import com.rentride.paymentservice.dto.external.UserResponseDto;
+import com.rentride.paymentservice.event.PaymentProcessedEvent;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
 
@@ -37,6 +43,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentGatewaySimulator paymentGatewaySimulator;
     private final TransactionReferenceGenerator transactionReferenceGenerator;
     private final BookingServiceClient bookingServiceClient;
+    private final PaymentEventPublisher paymentEventPublisher;
+    private final UserServiceClient userServiceClient;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -155,6 +163,7 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         Payment updatedPayment = paymentRepository.save(payment);
+        publishPaymentProcessedEvent(updatedPayment, booking, effectiveCustomerId);
         return PaymentResponse.fromEntity(updatedPayment);
     }
 
@@ -201,5 +210,82 @@ public class PaymentServiceImpl implements PaymentService {
                 .map(PaymentResponse::fromEntity)
                 .orElseThrow(() -> new PaymentNotFoundException(
                         "No payment records found for booking ID: " + bookingId));
+    }
+
+    // ── RabbitMQ Event Publication Helpers ──────────────────────────────────
+
+    private void publishPaymentProcessedEvent(Payment payment, BookingSummaryResponse booking, Long customerId) {
+        if (paymentEventPublisher == null) {
+            return;
+        }
+        try {
+            String bookingRef = (booking != null && booking.getBookingReference() != null)
+                    ? booking.getBookingReference()
+                    : "BK-" + payment.getBookingId();
+
+            String customerEmail = resolveCustomerEmail(customerId);
+            String customerName = resolveCustomerName(customerId);
+
+            PaymentProcessedEvent event = PaymentProcessedEvent.builder()
+                    .transactionReference(payment.getTransactionReference())
+                    .bookingReference(bookingRef)
+                    .customerEmail(customerEmail)
+                    .customerName(customerName)
+                    .amount(payment.getAmount())
+                    .currency(payment.getCurrency() != null ? payment.getCurrency().name() : "LKR")
+                    .paymentMethod(payment.getPaymentMethod() != null ? payment.getPaymentMethod().name() : "CREDIT_CARD")
+                    .status(payment.getStatus() != null ? payment.getStatus().name() : "PENDING")
+                    .failureReason(payment.getFailureReason())
+                    .receiptUrl(payment.getReceiptUrl())
+                    .occurredOn(payment.getUpdatedAt() != null ? payment.getUpdatedAt() : (payment.getCreatedAt() != null ? payment.getCreatedAt() : LocalDateTime.now()))
+                    .build();
+
+            paymentEventPublisher.publishPaymentProcessed(event);
+        } catch (Exception ex) {
+            log.error("Failed to build or publish PaymentProcessedEvent for txnRef={}: {}",
+                    payment.getTransactionReference(), ex.getMessage(), ex);
+        }
+    }
+
+    private String resolveCustomerEmail(Long customerId) {
+        try {
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null) {
+                HttpServletRequest request = attrs.getRequest();
+                String headerEmail = request.getHeader("X-User-Email");
+                String headerId = request.getHeader("X-User-Id");
+                if (headerEmail != null && !headerEmail.isBlank() &&
+                        (headerId == null || customerId == null || customerId.toString().equals(headerId))) {
+                    return headerEmail;
+                }
+            }
+        } catch (Exception ignored) {}
+
+        if (userServiceClient != null && customerId != null) {
+            try {
+                UserResponseDto user = userServiceClient.getUserById(customerId);
+                if (user != null && user.getEmail() != null && !user.getEmail().isBlank()) {
+                    return user.getEmail();
+                }
+            } catch (Exception e) {
+                log.warn("UserServiceClient lookup failed for customerId={}: {}", customerId, e.getMessage());
+            }
+        }
+
+        return "customer" + (customerId != null ? customerId : "") + "@rentride.com";
+    }
+
+    private String resolveCustomerName(Long customerId) {
+        if (userServiceClient != null && customerId != null) {
+            try {
+                UserResponseDto user = userServiceClient.getUserById(customerId);
+                if (user != null && user.getFullName() != null && !user.getFullName().isBlank()) {
+                    return user.getFullName();
+                }
+            } catch (Exception e) {
+                log.warn("UserServiceClient lookup failed for customerId={}: {}", customerId, e.getMessage());
+            }
+        }
+        return "Valued Customer";
     }
 }
