@@ -26,8 +26,11 @@ spring:
           writetimeout: 5000
 
   # ── Thymeleaf ─────────────────────────────────────────────────────────────
+  # Prefix is set to classpath:/templates/ so that templates are resolved as
+  # "email/<templateName>.html" — matching the sub-directory structure and the
+  # EmailServiceImpl templateEngine.process("<templateName>", context) call.
   thymeleaf:
-    prefix: classpath:/templates/email/
+    prefix: classpath:/templates/
     suffix: .html
     mode: HTML
     encoding: UTF-8

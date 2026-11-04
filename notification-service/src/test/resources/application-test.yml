@@ -2,7 +2,8 @@ spring:
   application:
     name: notification-service-test
 
-  # Use a no-op in-memory SMTP for context-load tests (no real server needed)
+  # Mock SMTP — JavaMailSender is replaced by @MockBean in tests;
+  # these properties just satisfy the auto-configuration binder.
   mail:
     host: localhost
     port: 3025
@@ -15,12 +16,26 @@ spring:
           starttls:
             enable: false
 
-  # Disable Thymeleaf cache for tests
+  # Thymeleaf — prefix must match production config (classpath:/templates/email/)
+  # so the EmailServiceImpl template resolution path is identical in tests.
+  # Cache disabled for fast test iteration.
   thymeleaf:
+    prefix: classpath:/templates/email/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
     cache: false
 
+# Disable Eureka so tests can run without a live Service Registry
 eureka:
   client:
     enabled: false
     register-with-eureka: false
     fetch-registry: false
+
+# Custom mail properties — required for MailProperties @ConfigurationProperties binding
+rentride:
+  notification:
+    mail:
+      from-email: no-reply@rentride.com
+      sender-name: RentRide Support
