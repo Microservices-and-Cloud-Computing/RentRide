@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: notification-service-test
+
+  # Use a no-op in-memory SMTP for context-load tests (no real server needed)
+  mail:
+    host: localhost
+    port: 3025
+    username:
+    password:
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+  # Disable Thymeleaf cache for tests
+  thymeleaf:
+    cache: false
+
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
