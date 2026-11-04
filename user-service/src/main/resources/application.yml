@@ -7,9 +7,9 @@ spring:
 
   # ── DataSource (HikariCP) ─────────────────────────────────────────────────
   datasource:
-    url: jdbc:postgresql://localhost:5432/rentride_user_db
-    username: postgres
-    password: postgres
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/rentride_user_db}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
     hikari:
       # Pool sizing — suitable for a single-node dev environment
@@ -41,7 +41,7 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: ${EUREKA_CLIENT_SERVICE_URL_DEFAULTZONE:http://localhost:8761/eureka/}
     register-with-eureka: true
     fetch-registry: true
   instance:
@@ -73,7 +73,7 @@ info:
 application:
   security:
     jwt:
-      secret-key: NGRmYmE1ZjQ4M2E4ZjI4ZjM2YTkzMjQ5OTM2NWNlMWQ3OGFmOWY4ZDgyZGMzNzRmOWI0OTFhZmQ=
+      secret-key: ${APPLICATION_SECURITY_JWT_SECRET_KEY:NGRmYmE1ZjQ4M2E4ZjI4ZjM2YTkzMjQ5OTM2NWNlMWQ3OGFmOWY4ZDgyZGMzNzRmOWI0OTFhZmQ=}
       expiration: 86400000            # 24 hours (86,400,000 ms)
       refresh-token:
         expiration: 604800000         # 7 days (604,800,000 ms)
@@ -94,5 +94,3 @@ logging:
     org.springframework.web: INFO
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
-
-

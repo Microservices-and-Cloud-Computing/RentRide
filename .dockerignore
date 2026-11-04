@@ -1,0 +1,27 @@
+# Git
+.git
+.gitignore
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Maven build outputs
+target/
+**/target/
+
+# Documentation and markdown
+*.md
+
+# Local Environment Variables
+.env
+.env.local
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
+
