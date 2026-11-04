@@ -1,0 +1,970 @@
+{
+  "info": {
+    "_postman_id": "rentride-platform-e2e-collection",
+    "name": "RentRide Platform E2E Test Suite",
+    "description": "Comprehensive End-to-End Postman Collection for RentRide Cloud Vehicle Rental Platform covering all core business scenarios, RBAC security, payment callbacks, event-driven messaging, and system health.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 - Authentication & Security (RBAC)",
+      "item": [
+        {
+          "name": "1.1 Register Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Customer Registration status code is 201 Created or 200 OK', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Customer role is confirmed', function () {",
+                  "    pm.expect(json.role).to.eql('CUSTOMER');",
+                  "});",
+                  "if (json.id) { pm.environment.set('customer_id', json.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Alex Mercer\",\n  \"email\": \"alex.mercer@rentride.com\",\n  \"password\": \"Password123!\",\n  \"phoneNumber\": \"+94771234567\",\n  \"driverLicenseNumber\": \"B1234567\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/auth/register/customer"
+          }
+        },
+        {
+          "name": "1.2 Register Provider",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Provider Registration status code is 201 Created or 200 OK', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Provider role is confirmed', function () {",
+                  "    pm.expect(json.role).to.eql('PROVIDER');",
+                  "});",
+                  "if (json.id) { pm.environment.set('provider_id', json.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Apex Fleet Manager\",\n  \"email\": \"fleet.provider@rentride.com\",\n  \"password\": \"Password123!\",\n  \"phoneNumber\": \"+94779876543\",\n  \"businessRegistrationNumber\": \"PV-990011\",\n  \"companyName\": \"Apex Fleet Rentals Ltd\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/auth/register/provider"
+          }
+        },
+        {
+          "name": "1.3 Register Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Admin Registration status code is 201 Created or 200 OK', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Admin role is confirmed', function () {",
+                  "    pm.expect(json.role).to.eql('ADMIN');",
+                  "});",
+                  "if (json.id) { pm.environment.set('admin_id', json.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Platform Super Admin\",\n  \"email\": \"admin@rentride.com\",\n  \"password\": \"Password123!\",\n  \"phoneNumber\": \"+94770000000\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/auth/register/admin"
+          }
+        },
+        {
+          "name": "1.4 Login Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Customer Login status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Customer JWT token returned', function () {",
+                  "    pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (json.accessToken) {",
+                  "    pm.environment.set('customer_token', json.accessToken);",
+                  "    pm.environment.set('jwt_token', json.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"alex.mercer@rentride.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "1.5 Login Provider",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Provider Login status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Provider JWT token returned', function () {",
+                  "    pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (json.accessToken) {",
+                  "    pm.environment.set('provider_token', json.accessToken);",
+                  "    pm.environment.set('provider_jwt_token', json.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"fleet.provider@rentride.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "1.6 Login Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Admin Login status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Admin JWT token returned', function () {",
+                  "    pm.expect(json.accessToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "if (json.accessToken) { pm.environment.set('admin_token', json.accessToken); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@rentride.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/auth/login"
+          }
+        },
+        {
+          "name": "1.7 RBAC - Customer Accessing Provider Fleet (Expect 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Customer blocked from Provider Fleet with 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/v1/vehicles/provider/my-fleet"
+          }
+        },
+        {
+          "name": "1.8 RBAC - Customer Creating Vehicle (Expect 403)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Customer blocked from creating vehicle with 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"make\": \"Nissan\",\n  \"model\": \"Leaf\",\n  \"manufacturingYear\": 2021,\n  \"licensePlateNumber\": \"WP-FORBIDDEN-01\",\n  \"seatingCapacity\": 5,\n  \"dailyRentalRate\": 9000.0,\n  \"location\": \"Kandy\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/vehicles"
+          }
+        },
+        {
+          "name": "1.9 RBAC - Unauthenticated Booking Creation (Expect 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Unauthenticated request to booking endpoint returns 401 Unauthorized', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicleId\": 1,\n  \"startDate\": \"2026-11-06\",\n  \"endDate\": \"2026-11-09\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/bookings"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Vehicle Onboarding & Search",
+      "item": [
+        {
+          "name": "2.1 Create Vehicle Category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Category created with 200 or 201', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201]);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "if (json.id) { pm.environment.set('category_id', json.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Economy Sedan\",\n  \"description\": \"Fuel efficient 4-door vehicles suitable for city travel\",\n  \"baseDailyRate\": 10000.0\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/categories"
+          }
+        },
+        {
+          "name": "2.2 Provider Adds Vehicle to Fleet",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Vehicle created with 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Vehicle status is AVAILABLE', function () {",
+                  "    pm.expect(json.status).to.eql('AVAILABLE');",
+                  "});",
+                  "if (json.id) { pm.environment.set('vehicle_id', json.id); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"make\": \"Toyota\",\n  \"model\": \"Axio\",\n  \"manufacturingYear\": 2022,\n  \"licensePlateNumber\": \"WP-CBA-2026\",\n  \"seatingCapacity\": 5,\n  \"fuelType\": \"PETROL\",\n  \"transmission\": \"AUTOMATIC\",\n  \"dailyRentalRate\": 10000.0,\n  \"location\": \"Colombo\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/vehicles"
+          }
+        },
+        {
+          "name": "2.3 Customer Searches Available Vehicles",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Vehicle search returns 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Search results contain vehicles', function () {",
+                  "    pm.expect(json).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/v1/vehicles/search?location=Colombo&maxPrice=15000"
+          }
+        },
+        {
+          "name": "2.4 Provider Views Fleet",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Provider fleet returned with 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Fleet contains added vehicle', function () {",
+                  "    pm.expect(json).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_token}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/v1/vehicles/provider/my-fleet"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Reservation Workflow & Date Overlap Prevention",
+      "item": [
+        {
+          "name": "3.1 Check Vehicle Availability",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Vehicle availability returned 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Vehicle is available', function () {",
+                  "    pm.expect(json.available).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/v1/vehicles/{{vehicle_id}}/availability"
+          }
+        },
+        {
+          "name": "3.2 Customer Creates Booking",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Booking created with 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Booking status is PENDING_PAYMENT', function () {",
+                  "    pm.expect(json.status).to.eql('PENDING_PAYMENT');",
+                  "});",
+                  "if (json.id) { pm.environment.set('booking_id', json.id); }",
+                  "if (json.bookingReference) { pm.environment.set('booking_reference', json.bookingReference); }",
+                  "if (json.totalCost) { pm.environment.set('total_cost', json.totalCost.toString()); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicleId\": {{vehicle_id}},\n  \"startDate\": \"2026-11-06\",\n  \"endDate\": \"2026-11-09\",\n  \"pickupLocation\": \"Colombo Central Station\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/bookings"
+          }
+        },
+        {
+          "name": "3.3 Date Overlap Conflict Check (Expect 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Overlapping booking prevented with 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicleId\": {{vehicle_id}},\n  \"startDate\": \"2026-11-06\",\n  \"endDate\": \"2026-11-09\",\n  \"pickupLocation\": \"Colombo Central Station\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/bookings"
+          }
+        },
+        {
+          "name": "3.4 Customer Views Bookings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Customer bookings returned with 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Bookings array is not empty', function () {",
+                  "    pm.expect(json).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/v1/bookings/customer/my-bookings"
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Online Payment & OpenFeign Callback",
+      "item": [
+        {
+          "name": "4.1 Customer Checkout Payment - Approved Card",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Payment checkout succeeded with 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Payment status is COMPLETED', function () {",
+                  "    pm.expect(json.status).to.eql('COMPLETED');",
+                  "});",
+                  "if (json.transactionReference) { pm.environment.set('transaction_ref', json.transactionReference); }"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": {{booking_id}},\n  \"amount\": {{total_cost}},\n  \"currency\": \"LKR\",\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"cardNumber\": \"4111111111114242\",\n  \"cardHolderName\": \"Alex Mercer\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2028,\n  \"cvv\": \"123\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/payments/checkout"
+          }
+        },
+        {
+          "name": "4.2 Verify Payment Transaction",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Transaction verification returned 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Transaction is verified and COMPLETED', function () {",
+                  "    pm.expect(json.status).to.eql('COMPLETED');",
+                  "    pm.expect(json.isVerified).to.be.true;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gateway_url}}/api/v1/payments/verify/{{transaction_ref}}"
+          }
+        },
+        {
+          "name": "4.3 Verify Booking Transitioned to CONFIRMED via OpenFeign",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Booking lookup returns 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Booking status transitioned to CONFIRMED via OpenFeign', function () {",
+                  "    pm.expect(json.status).to.eql('CONFIRMED');",
+                  "    pm.expect(json.paymentStatus).to.eql('PAID');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/v1/bookings/{{booking_id}}"
+          }
+        },
+        {
+          "name": "4.4 Process Payment - Declined Card Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Declined card checkout handled cleanly', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 400, 402]);",
+                  "    if (pm.response.code === 200) {",
+                  "        var json = pm.response.json();",
+                  "        pm.expect(json.status).to.eql('FAILED');",
+                  "    }",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bookingId\": {{booking_id}},\n  \"amount\": {{booking_id}}0.0,\n  \"currency\": \"LKR\",\n  \"paymentMethod\": \"CREDIT_CARD\",\n  \"cardNumber\": \"41111111111{{booking_id}}0\",\n  \"cardHolderName\": \"Alex Mercer\",\n  \"expiryMonth\": 12,\n  \"expiryYear\": 2028,\n  \"cvv\": \"000\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/payments/checkout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Event-Driven Notification Check",
+      "item": [
+        {
+          "name": "5.1 Verify MailHog Captured Confirmation Email",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('MailHog messages endpoint returns 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('MailHog contains dispatched email messages', function () {",
+                  "    pm.expect(json.items).to.be.an('array').that.is.not.empty;",
+                  "    var firstMail = json.items[0];",
+                  "    pm.expect(firstMail.Content.Headers.Subject[0]).to.include('Booking Confirmation');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{mailhog_url}}/api/v2/messages"
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Rental Lifecycle Operations",
+      "item": [
+        {
+          "name": "6.1 Provider Vehicle Handover (Pickup)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Handover recorded with 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Booking status transitioned to ACTIVE_RENTAL', function () {",
+                  "    pm.expect(json.bookingStatus).to.eql('ACTIVE_RENTAL');",
+                  "    pm.expect(json.vehicleStatus).to.eql('RENTED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"odometerReading\": 45000,\n  \"fuelLevelPercent\": 100,\n  \"handoverNotes\": \"Keys and registration documents handed over. Vehicle in pristine condition.\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/bookings/{{booking_id}}/pickup"
+          }
+        },
+        {
+          "name": "6.2 Provider Vehicle Return Inspection",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Return inspection recorded with 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Booking status is COMPLETED and vehicle returns to AVAILABLE', function () {",
+                  "    pm.expect(json.bookingStatus).to.eql('COMPLETED');",
+                  "    pm.expect(json.vehicleStatus).to.eql('AVAILABLE');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{provider_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"odometerReading\": 45350,\n  \"fuelLevelPercent\": 100,\n  \"vehicleCondition\": \"GOOD\",\n  \"additionalCharges\": 0.0,\n  \"returnNotes\": \"Vehicle returned on time, full fuel tank, clean interior, zero body damage.\"\n}"
+            },
+            "url": "{{gateway_url}}/api/v1/bookings/{{booking_id}}/return"
+          }
+        },
+        {
+          "name": "6.3 Verify Vehicle Returned to AVAILABLE",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Vehicle lookup returns 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Vehicle state is AVAILABLE for new bookings', function () {",
+                  "    pm.expect(json.status).to.eql('AVAILABLE');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customer_token}}"
+              }
+            ],
+            "url": "{{gateway_url}}/api/v1/vehicles/{{vehicle_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Actuator & System Health",
+      "item": [
+        {
+          "name": "7.1 API Gateway Health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('API Gateway Health status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('System status is UP', function () {",
+                  "    pm.expect(json.status).to.eql('UP');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gateway_url}}/actuator/health"
+          }
+        },
+        {
+          "name": "7.2 Eureka Registered Applications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Eureka Applications status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Eureka applications list is populated', function () {",
+                  "    pm.expect(json.applications.application).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{eureka_url}}/eureka/apps"
+          }
+        },
+        {
+          "name": "7.3 Gateway Route Definitions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Gateway Route Definitions status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "var json = pm.response.json();",
+                  "pm.test('Route definitions array is populated', function () {",
+                  "    pm.expect(json).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{gateway_url}}/actuator/gateway/routes"
+          }
+        }
+      ]
+    }
+  ]
+}

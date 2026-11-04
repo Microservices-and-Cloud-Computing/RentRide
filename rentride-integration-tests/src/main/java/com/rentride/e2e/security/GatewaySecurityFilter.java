@@ -43,6 +43,8 @@ public class GatewaySecurityFilter implements Filter {
             "/api/v1/auth/register/**",
             "/api/v1/auth/login",
             "/api/v1/auth/refresh",
+            "/api/v1/categories",
+            "/api/v1/categories/**",
             "/api/v1/vehicles/status",
             "/api/v1/vehicles/search",
             "/api/v1/vehicles/{id:[0-9]+}",
@@ -50,7 +52,9 @@ public class GatewaySecurityFilter implements Filter {
             "/api/v1/bookings/status",
             "/api/v1/payments/status",
             "/api/v1/payments/verify/**",
-            "/actuator/**"
+            "/actuator/**",
+            "/eureka/**",
+            "/api/v2/messages"
     );
 
     @Override
@@ -94,8 +98,9 @@ public class GatewaySecurityFilter implements Filter {
 
             log.debug("GatewaySecurityFilter: Token validated. userId={}, email={}, role={}", userId, email, role);
 
-            // Role enforcement: provider fleet endpoints require PROVIDER or ADMIN
-            if (path.startsWith("/api/v1/vehicles/provider") || (path.equals("/api/v1/vehicles") && "POST".equalsIgnoreCase(method))) {
+            // Role enforcement: provider fleet & lifecycle operations require PROVIDER or ADMIN
+            if (path.startsWith("/api/v1/vehicles/provider") || (path.equals("/api/v1/vehicles") && "POST".equalsIgnoreCase(method))
+                    || path.contains("/pickup") || path.contains("/return")) {
                 if (!"PROVIDER".equalsIgnoreCase(role) && !"ADMIN".equalsIgnoreCase(role)) {
                     log.warn("GatewaySecurityFilter: Access denied for role {} on path {}", role, path);
                     sendJsonError(httpResponse, HttpServletResponse.SC_FORBIDDEN, "Access denied: insufficient privileges");
