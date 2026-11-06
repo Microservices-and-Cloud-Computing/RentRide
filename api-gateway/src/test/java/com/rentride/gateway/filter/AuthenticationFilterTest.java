@@ -2,15 +2,15 @@ package com.rentride.gateway.filter;
 
 import com.rentride.gateway.util.JwtUtils;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
+import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.web.server.ServerWebExchange;
@@ -20,25 +20,19 @@ import reactor.test.StepVerifier;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
 class AuthenticationFilterTest {
 
-    @Mock
-    private RouterValidator routerValidator;
-
-    @Mock
-    private JwtUtils jwtUtils;
-
-    @Mock
-    private GatewayFilterChain filterChain;
-
+    private TestRouterValidator routerValidator;
+    private TestJwtUtils jwtUtils;
+    private TestFilterChain filterChain;
     private AuthenticationFilter authenticationFilter;
 
     @BeforeEach
     void setUp() {
+        routerValidator = new TestRouterValidator();
+        jwtUtils = new TestJwtUtils();
+        filterChain = new TestFilterChain();
         authenticationFilter = new AuthenticationFilter(routerValidator, jwtUtils);
     }
 
@@ -48,14 +42,13 @@ class AuthenticationFilterTest {
         MockServerHttpRequest request = MockServerHttpRequest.post("/api/v1/auth/login").build();
         ServerWebExchange exchange = MockServerWebExchange.from(request);
 
-        when(routerValidator.isSecured(any())).thenReturn(false);
-        when(filterChain.filter(exchange)).thenReturn(Mono.empty());
+        routerValidator.secured = false;
 
         Mono<Void> result = authenticationFilter.apply(new AuthenticationFilter.Config()).filter(exchange, filterChain);
 
         StepVerifier.create(result).verifyComplete();
-        verify(filterChain).filter(exchange);
-        verifyNoInteractions(jwtUtils);
+        assertThat(filterChain.invoked).isTrue();
+        assertThat(jwtUtils.validateCalled).isFalse();
     }
 
     @Test
@@ -64,7 +57,7 @@ class AuthenticationFilterTest {
         MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/users/me").build();
         ServerWebExchange exchange = MockServerWebExchange.from(request);
 
-        when(routerValidator.isSecured(any())).thenReturn(true);
+        routerValidator.secured = true;
 
         Mono<Void> result = authenticationFilter.apply(new AuthenticationFilter.Config()).filter(exchange, filterChain);
 
@@ -72,11 +65,13 @@ class AuthenticationFilterTest {
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 
         MockServerWebExchange mockExchange = (MockServerWebExchange) exchange;
-        String responseBody = mockExchange.getResponse().getBodyAsString().block();
+        DataBuffer buffer = mockExchange.getResponse().getBody().blockFirst();
+        assertThat(buffer).isNotNull();
+        String responseBody = buffer.toString(StandardCharsets.UTF_8);
         assertThat(responseBody).contains("\"status\":401");
         assertThat(responseBody).contains("\"error\":\"Unauthorized\"");
         assertThat(responseBody).contains("Missing or invalid authorization token");
-        verify(filterChain, never()).filter(any());
+        assertThat(filterChain.invoked).isFalse();
     }
 
     @Test
@@ -87,13 +82,13 @@ class AuthenticationFilterTest {
                 .build();
         ServerWebExchange exchange = MockServerWebExchange.from(request);
 
-        when(routerValidator.isSecured(any())).thenReturn(true);
+        routerValidator.secured = true;
 
         Mono<Void> result = authenticationFilter.apply(new AuthenticationFilter.Config()).filter(exchange, filterChain);
 
         StepVerifier.create(result).verifyComplete();
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        verify(filterChain, never()).filter(any());
+        assertThat(filterChain.invoked).isFalse();
     }
 
     @Test
@@ -104,14 +99,14 @@ class AuthenticationFilterTest {
                 .build();
         ServerWebExchange exchange = MockServerWebExchange.from(request);
 
-        when(routerValidator.isSecured(any())).thenReturn(true);
-        when(jwtUtils.validateToken("invalid.jwt.token")).thenReturn(false);
+        routerValidator.secured = true;
+        jwtUtils.valid = false;
 
         Mono<Void> result = authenticationFilter.apply(new AuthenticationFilter.Config()).filter(exchange, filterChain);
 
         StepVerifier.create(result).verifyComplete();
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
-        verify(filterChain, never()).filter(any());
+        assertThat(filterChain.invoked).isFalse();
     }
 
     @Test
@@ -122,25 +117,62 @@ class AuthenticationFilterTest {
                 .build();
         ServerWebExchange exchange = MockServerWebExchange.from(request);
 
-        Claims mockClaims = mock(Claims.class);
-        when(mockClaims.get("userId")).thenReturn(99L);
-        when(mockClaims.getSubject()).thenReturn("valid.user@rentride.com");
-        when(mockClaims.get("role")).thenReturn("ROLE_CUSTOMER");
+        Claims testClaims = Jwts.claims()
+                .subject("valid.user@rentride.com")
+                .add("userId", 99L)
+                .add("role", "ROLE_CUSTOMER")
+                .build();
 
-        when(routerValidator.isSecured(any())).thenReturn(true);
-        when(jwtUtils.validateToken("valid.jwt.token")).thenReturn(true);
-        when(jwtUtils.getClaims("valid.jwt.token")).thenReturn(mockClaims);
-        when(filterChain.filter(any(ServerWebExchange.class))).thenAnswer(invocation -> {
-            ServerWebExchange mutatedExchange = invocation.getArgument(0);
-            assertThat(mutatedExchange.getRequest().getHeaders().getFirst("X-User-Id")).isEqualTo("99");
-            assertThat(mutatedExchange.getRequest().getHeaders().getFirst("X-User-Email")).isEqualTo("valid.user@rentride.com");
-            assertThat(mutatedExchange.getRequest().getHeaders().getFirst("X-User-Role")).isEqualTo("ROLE_CUSTOMER");
-            return Mono.empty();
-        });
+        routerValidator.secured = true;
+        jwtUtils.valid = true;
+        jwtUtils.claims = testClaims;
 
         Mono<Void> result = authenticationFilter.apply(new AuthenticationFilter.Config()).filter(exchange, filterChain);
 
         StepVerifier.create(result).verifyComplete();
-        verify(filterChain).filter(any(ServerWebExchange.class));
+        assertThat(filterChain.invoked).isTrue();
+        assertThat(filterChain.capturedExchange.getRequest().getHeaders().getFirst("X-User-Id")).isEqualTo("99");
+        assertThat(filterChain.capturedExchange.getRequest().getHeaders().getFirst("X-User-Email")).isEqualTo("valid.user@rentride.com");
+        assertThat(filterChain.capturedExchange.getRequest().getHeaders().getFirst("X-User-Role")).isEqualTo("ROLE_CUSTOMER");
+    }
+
+    // --- Lightweight Test Doubles (Zero Mockito Overhead / Java 21 dynamic attach safe) ---
+
+    private static class TestRouterValidator extends RouterValidator {
+        boolean secured = false;
+
+        @Override
+        public boolean isSecured(ServerHttpRequest request) {
+            return secured;
+        }
+    }
+
+    private static class TestJwtUtils extends JwtUtils {
+        boolean valid = false;
+        boolean validateCalled = false;
+        Claims claims;
+
+        @Override
+        public boolean validateToken(String token) {
+            this.validateCalled = true;
+            return valid;
+        }
+
+        @Override
+        public Claims getClaims(String token) {
+            return claims;
+        }
+    }
+
+    private static class TestFilterChain implements GatewayFilterChain {
+        boolean invoked = false;
+        ServerWebExchange capturedExchange;
+
+        @Override
+        public Mono<Void> filter(ServerWebExchange exchange) {
+            this.invoked = true;
+            this.capturedExchange = exchange;
+            return Mono.empty();
+        }
     }
 }
