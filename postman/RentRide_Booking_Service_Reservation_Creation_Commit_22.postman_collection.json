@@ -1,0 +1,950 @@
+{
+  "info": {
+    "_postman_id": "c2200000-booking-service-reservation-rentride",
+    "name": "RentRide - Booking Service Reservation Creation (Commit 22)",
+    "description": "Comprehensive Postman test collection for Commit 22: Customer Vehicle Reservation Creation (Business Scenario 01), Date Overlap Detection, Accurate BigDecimal Cost Calculation, OpenFeign Upstream Vehicle Locking, and Ownership Access Control.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "booking_service_url",
+      "value": "http://localhost:8083",
+      "type": "string"
+    },
+    {
+      "key": "vehicle_service_url",
+      "value": "http://localhost:8082",
+      "type": "string"
+    },
+    {
+      "key": "gateway_url",
+      "value": "http://localhost:8085",
+      "type": "string"
+    },
+    {
+      "key": "customer_id",
+      "value": "10",
+      "type": "string"
+    },
+    {
+      "key": "vehicle_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "booking_id",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Pre-Condition Checks & Seed",
+      "item": [
+        {
+          "name": "1.1 Reset Vehicle 1 Status to AVAILABLE",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Vehicle is AVAILABLE\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"AVAILABLE\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"AVAILABLE\",\n  \"reason\": \"Pre-test reset for reservation creation\"\n}"
+            },
+            "url": {
+              "raw": "{{vehicle_service_url}}/api/v1/vehicles/{{vehicle_id}}/status",
+              "host": [
+                "{{vehicle_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vehicles",
+                "{{vehicle_id}}",
+                "status"
+              ]
+            },
+            "description": "Prepares vehicle 1 by resetting its status to AVAILABLE."
+          },
+          "response": []
+        },
+        {
+          "name": "1.2 Verify Vehicle 1 Availability (isAvailable == true)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Vehicle is available for booking\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.isAvailable).to.eql(true);",
+                  "    pm.expect(jsonData.status).to.eql(\"AVAILABLE\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{vehicle_service_url}}/api/v1/vehicles/{{vehicle_id}}/availability",
+              "host": [
+                "{{vehicle_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vehicles",
+                "{{vehicle_id}}",
+                "availability"
+              ]
+            },
+            "description": "Checks vehicle-service availability endpoint directly."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Scenario 01: Reservation Creation (Happy Paths)",
+      "item": [
+        {
+          "name": "2.1 Create Multi-Day Reservation (3 Days @ 10,000 = 30,000 LKR)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201 Created\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "",
+                  "pm.test(\"Status is PENDING_PAYMENT\", function () {",
+                  "    pm.expect(jsonData.status).to.eql(\"PENDING_PAYMENT\");",
+                  "});",
+                  "",
+                  "pm.test(\"Reference code follows RR-BK- format\", function () {",
+                  "    pm.expect(jsonData.bookingReference).to.match(/^RR-BK-\\d{8}-[A-Z0-9]{6}$/);",
+                  "});",
+                  "",
+                  "pm.test(\"Accurate 3 days duration and 30,000 cost calculation\", function () {",
+                  "    pm.expect(jsonData.totalDays).to.eql(3);",
+                  "    pm.expect(jsonData.dailyRate).to.eql(10000.00);",
+                  "    pm.expect(jsonData.totalCost).to.eql(30000.00);",
+                  "});",
+                  "",
+                  "pm.test(\"Vehicle specifications mapped correctly via Feign\", function () {",
+                  "    pm.expect(jsonData.vehicleDetails).to.be.an(\"object\");",
+                  "    pm.expect(jsonData.vehicleDetails.make).to.eql(\"Toyota\");",
+                  "    pm.expect(jsonData.vehicleDetails.model).to.eql(\"Aqua\");",
+                  "    pm.expect(jsonData.vehicleDetails.licensePlateNumber).to.eql(\"WP-CBA-1234\");",
+                  "});",
+                  "",
+                  "if (jsonData.id) {",
+                  "    pm.collectionVariables.set(\"booking_id\", jsonData.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{customer_id}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ROLE_CUSTOMER"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicleId\": 1,\n  \"startDate\": \"2026-11-01\",\n  \"endDate\": \"2026-11-04\",\n  \"pickupNotes\": \"Arriving around 10:00 AM at Bandaranaike Airport\"\n}"
+            },
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            },
+            "description": "Creates a 3-day reservation from 2026-11-01 to 2026-11-04. Automatically locks vehicle to RENTED in vehicle-service."
+          },
+          "response": []
+        },
+        {
+          "name": "2.2 Verify Vehicle 1 is Automatically Locked to RENTED on vehicle-service",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Vehicle is locked: status is RENTED and isAvailable is false\", function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql(\"RENTED\");",
+                  "    pm.expect(jsonData.isAvailable).to.eql(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{vehicle_service_url}}/api/v1/vehicles/{{vehicle_id}}/availability",
+              "host": [
+                "{{vehicle_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vehicles",
+                "{{vehicle_id}}",
+                "availability"
+              ]
+            },
+            "description": "Verifies that booking creation triggered an OpenFeign RPC call to lock the vehicle to RENTED."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Querying Reservations",
+      "item": [
+        {
+          "name": "3.1 Get Booking by ID (Customer Owner)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Reservation matches customer ID\", function () {",
+                  "    pm.expect(jsonData.id).to.eql(Number(pm.collectionVariables.get(\"booking_id\")));",
+                  "    pm.expect(jsonData.customerId).to.eql(Number(pm.collectionVariables.get(\"customer_id\")));",
+                  "    pm.expect(jsonData.status).to.eql(\"PENDING_PAYMENT\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{customer_id}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ROLE_CUSTOMER"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings/{{booking_id}}",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{booking_id}}"
+              ]
+            },
+            "description": "Retrieves booking details verifying customer ownership."
+          },
+          "response": []
+        },
+        {
+          "name": "3.2 Get Customer My-Bookings History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Response is an array containing customer bookings\", function () {",
+                  "    pm.expect(jsonData).to.be.an(\"array\");",
+                  "    pm.expect(jsonData.length).to.be.at.least(1);",
+                  "    pm.expect(jsonData[0].customerId).to.eql(Number(pm.collectionVariables.get(\"customer_id\")));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{customer_id}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ROLE_CUSTOMER"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings/customer/my-bookings",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "customer",
+                "my-bookings"
+              ]
+            },
+            "description": "Lists all reservations belonging to the authenticated customer."
+          },
+          "response": []
+        },
+        {
+          "name": "3.3 Admin Access to Booking (Bypasses Ownership Check)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Admin successfully retrieved customer reservation\", function () {",
+                  "    pm.expect(jsonData.id).to.eql(Number(pm.collectionVariables.get(\"booking_id\")));",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "999"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ROLE_ADMIN"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings/{{booking_id}}",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{booking_id}}"
+              ]
+            },
+            "description": "Verifies that an ADMIN can view any reservation regardless of customerId."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Error Handling & Validation Tests",
+      "item": [
+        {
+          "name": "4.1 Conflict: Vehicle Already Rented (409 Conflict)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 409 Conflict\", function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Error message indicates vehicle unavailable\", function () {",
+                  "    pm.expect(jsonData.error).to.eql(\"Conflict\");",
+                  "    pm.expect(jsonData.message).to.include(\"not available for reservation\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "15"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ROLE_CUSTOMER"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicleId\": 1,\n  \"startDate\": \"2026-11-10\",\n  \"endDate\": \"2026-11-12\"\n}"
+            },
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            },
+            "description": "Attempts to book a vehicle that is already RENTED."
+          },
+          "response": []
+        },
+        {
+          "name": "4.2 Validation: End Date Before Start Date (400 Bad Request)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Error message indicates invalid date ordering\", function () {",
+                  "    pm.expect(jsonData.error).to.eql(\"Bad Request\");",
+                  "    pm.expect(jsonData.message).to.include(\"End date\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{customer_id}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ROLE_CUSTOMER"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicleId\": 1,\n  \"startDate\": \"2026-11-10\",\n  \"endDate\": \"2026-11-05\"\n}"
+            },
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            },
+            "description": "Rejects request where endDate precedes startDate."
+          },
+          "response": []
+        },
+        {
+          "name": "4.3 Validation: Start Date in the Past (400 Bad Request)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Error indicates past date violation\", function () {",
+                  "    pm.expect(jsonData.error).to.eql(\"Bad Request\");",
+                  "    pm.expect(jsonData.message).to.include(\"future\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{customer_id}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ROLE_CUSTOMER"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicleId\": 1,\n  \"startDate\": \"2020-01-01\",\n  \"endDate\": \"2020-01-05\"\n}"
+            },
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            },
+            "description": "Rejects reservation requests with past dates."
+          },
+          "response": []
+        },
+        {
+          "name": "4.4 Validation: Duration Exceeds 30 Days (400 Bad Request)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Error indicates 30-day limit exceeded\", function () {",
+                  "    pm.expect(jsonData.error).to.eql(\"Bad Request\");",
+                  "    pm.expect(jsonData.message).to.include(\"exceeds maximum allowed limit of 30 days\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{customer_id}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ROLE_CUSTOMER"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicleId\": 1,\n  \"startDate\": \"2026-11-01\",\n  \"endDate\": \"2026-12-15\"\n}"
+            },
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            },
+            "description": "Validates business constraint capping reservations to maximum 30 days."
+          },
+          "response": []
+        },
+        {
+          "name": "4.5 Security: Unauthorized Customer Accessing Other's Booking (403 Forbidden)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 403 Forbidden\", function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Error indicates forbidden access\", function () {",
+                  "    pm.expect(jsonData.error).to.eql(\"Forbidden\");",
+                  "    pm.expect(jsonData.message).to.include(\"do not have permission\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "99"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ROLE_CUSTOMER"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings/{{booking_id}}",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{booking_id}}"
+              ]
+            },
+            "description": "Ensures customers cannot view bookings made by another user."
+          },
+          "response": []
+        },
+        {
+          "name": "4.6 Not Found: Non-Existent Booking ID (404 Not Found)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 404 Not Found\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Error indicates booking not found\", function () {",
+                  "    pm.expect(jsonData.error).to.eql(\"Not Found\");",
+                  "    pm.expect(jsonData.message).to.include(\"Booking reservation not found with ID: 99999\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{customer_id}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ROLE_CUSTOMER"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings/99999",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "99999"
+              ]
+            },
+            "description": "Handles 404 when querying an unknown booking ID."
+          },
+          "response": []
+        },
+        {
+          "name": "4.7 Missing Header: Missing X-User-Id (400 Bad Request)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 400 Bad Request\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Error indicates missing header\", function () {",
+                  "    pm.expect(jsonData.error).to.eql(\"Bad Request\");",
+                  "    pm.expect(jsonData.message).to.include(\"Missing required request header: X-User-Id\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicleId\": 1,\n  \"startDate\": \"2026-11-01\",\n  \"endDate\": \"2026-11-04\"\n}"
+            },
+            "url": {
+              "raw": "{{booking_service_url}}/api/v1/bookings",
+              "host": [
+                "{{booking_service_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            },
+            "description": "Verifies that booking-service enforces the mandatory X-User-Id header."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. API Gateway Routed Tests (Port 8085)",
+      "item": [
+        {
+          "name": "5.1 Gateway Routing - Whitelisted Status Endpoint",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200 OK\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Gateway routed successfully to booking-service\", function () {",
+                  "    pm.expect(jsonData.service).to.eql(\"booking-service\");",
+                  "    pm.expect(jsonData.status).to.eql(\"UP\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/bookings/status",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "status"
+              ]
+            },
+            "description": "Verifies public whitelisted route through API Gateway without JWT."
+          },
+          "response": []
+        },
+        {
+          "name": "5.2 Gateway Security - Unauthenticated Protected Route (Expects 401)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 401 Unauthorized\", function () {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "var jsonData = pm.response.json();",
+                  "pm.test(\"Gateway AuthenticationFilter blocked unauthenticated request\", function () {",
+                  "    pm.expect(jsonData.status).to.eql(401);",
+                  "    pm.expect(jsonData.error).to.eql(\"Unauthorized\");",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicleId\": 1,\n  \"startDate\": \"2026-11-01\",\n  \"endDate\": \"2026-11-04\"\n}"
+            },
+            "url": {
+              "raw": "{{gateway_url}}/api/v1/bookings",
+              "host": [
+                "{{gateway_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            },
+            "description": "Verifies API Gateway security filter chain protects reservation creation."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
+

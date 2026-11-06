@@ -1,0 +1,94 @@
+# ── Server Configuration ──────────────────────────────────────────────────────
+server:
+  port: 8085
+
+# ── Spring Application Configuration ─────────────────────────────────────────
+spring:
+  application:
+    name: notification-service
+
+  # ── Mail (SMTP) Configuration ───────────────────────────────────────────────
+  # Defaults target a local MailHog dev server on port 1025.
+  # Override via environment variables for staging/production (SendGrid, SES).
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+  # ── Thymeleaf ─────────────────────────────────────────────────────────────
+  # Prefix resolves templates from classpath:/templates/email/
+  # EmailServiceImpl calls templateEngine.process("<templateName>", context)
+  # so the full path becomes: classpath:/templates/email/<templateName>.html
+  thymeleaf:
+    prefix: classpath:/templates/email/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    cache: false   # disable cache in dev; set true for production
+
+  # ── RabbitMQ / AMQP Connection ──────────────────────────────────────────────
+  # Defaults target a local RabbitMQ instance. Override via environment variables
+  # for staging/production deployments (CloudAMQP, AWS MQ, etc.).
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    listener:
+      simple:
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 2000ms
+          multiplier: 2.0
+          max-interval: 10000ms
+        default-requeue-rejected: false   # dead-letter after retry exhaustion
+
+# ── RentRide Notification Defaults ───────────────────────────────────────────
+rentride:
+  notification:
+    mail:
+      from-email: no-reply@rentride.com
+      sender-name: RentRide Support
+
+# ── Eureka Client Configuration ──────────────────────────────────────────────
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.uuid}
+
+# ── Actuator Endpoints ────────────────────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  endpoint:
+    health:
+      show-details: always
+  info:
+    env:
+      enabled: true
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.rentride.notificationservice: DEBUG
+    org.springframework.mail: DEBUG
+    org.springframework.amqp: INFO
+    com.rabbitmq: WARN

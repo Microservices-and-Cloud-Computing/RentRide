@@ -1,0 +1,616 @@
+{
+  "info": {
+    "_postman_id": "c23-booking-lifecycle-rentride",
+    "name": "RentRide - Commit 23: Booking Lifecycle & Vehicle Handover Transitions",
+    "description": "Comprehensive integration suite for vehicle pickup, inspection recording, return processing, provider authorization verification, and Feign synchronization across Booking-Service, Vehicle-Service, and API Gateway.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "gatewayUrl",
+      "value": "http://localhost:8085",
+      "type": "string"
+    },
+    {
+      "key": "bookingServiceUrl",
+      "value": "http://localhost:8083",
+      "type": "string"
+    },
+    {
+      "key": "vehicleServiceUrl",
+      "value": "http://localhost:8082",
+      "type": "string"
+    },
+    {
+      "key": "userServiceUrl",
+      "value": "http://localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "customerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "providerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "bookingId",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "bookingReference",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "vehicleId",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Authentication",
+      "item": [
+        {
+          "name": "1.1 Login as Provider (Fleet Owner)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.accessToken) {",
+                  "    pm.collectionVariables.set('providerToken', jsonData.accessToken);",
+                  "}",
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Token received', function () {",
+                  "    pm.expect(jsonData.accessToken).to.not.be.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"provider1@rentride.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{userServiceUrl}}/api/v1/auth/login",
+              "host": [
+                "{{userServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "1.2 Login as Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.accessToken) {",
+                  "    pm.collectionVariables.set('customerToken', jsonData.accessToken);",
+                  "}",
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"kasun@rentride.com\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "url": {
+              "raw": "{{userServiceUrl}}/api/v1/auth/login",
+              "host": [
+                "{{userServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Reservation Setup",
+      "item": [
+        {
+          "name": "2.1 Create Reservation (PENDING_PAYMENT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.id) {",
+                  "    pm.collectionVariables.set('bookingId', jsonData.id.toString());",
+                  "    pm.collectionVariables.set('bookingReference', jsonData.bookingReference);",
+                  "}",
+                  "pm.test('Status code is 201 Created', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Initial status is PENDING_PAYMENT', function () {",
+                  "    pm.expect(jsonData.status).to.eql('PENDING_PAYMENT');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{customerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vehicleId\": {{vehicleId}},\n  \"startDate\": \"2026-11-20\",\n  \"endDate\": \"2026-11-23\",\n  \"pickupNotes\": \"Airport arrival branch pickup\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/bookings",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings"
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.2 Attempt Pickup Early (Rejects with 409 Conflict)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "pm.test('Error indicates status must be CONFIRMED', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.message).to.include('CONFIRMED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{providerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"odometerReading\": 45200.5,\n  \"fuelLevelPercent\": 100,\n  \"handoverNotes\": \"Attempting pickup prior to confirmation\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/bookings/{{bookingId}}/pickup",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}",
+                "pickup"
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.3 Confirm Reservation (Transitions to CONFIRMED)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Status transitioned to CONFIRMED', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql('CONFIRMED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{bookingServiceUrl}}/api/v1/bookings/{{bookingId}}/confirm",
+              "host": [
+                "{{bookingServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}",
+                "confirm"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Vehicle Handover & Pickup",
+      "item": [
+        {
+          "name": "3.1 Attempt Pickup by Unauthorized Provider (Rejects with 403 Forbidden)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 403 Forbidden', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "});",
+                  "pm.test('Error indicates permission denied', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.message).to.include('permission to manage');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "99"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ROLE_PROVIDER"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"odometerReading\": 45200.5,\n  \"fuelLevelPercent\": 100,\n  \"handoverNotes\": \"Intruder attempting pickup\"\n}"
+            },
+            "url": {
+              "raw": "{{bookingServiceUrl}}/api/v1/bookings/{{bookingId}}/pickup",
+              "host": [
+                "{{bookingServiceUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}",
+                "pickup"
+              ]
+            }
+          }
+        },
+        {
+          "name": "3.2 Successful Vehicle Handover & Pickup (via Gateway)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Lifecycle status is ACTIVE_RENTAL', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql('ACTIVE_RENTAL');",
+                  "    pm.expect(jsonData.actualPickupTime).to.not.be.null;",
+                  "    pm.expect(jsonData.vehicleStatusSummary).to.eql('RENTED');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{providerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"odometerReading\": 45200.5,\n  \"fuelLevelPercent\": 100,\n  \"handoverNotes\": \"Key handed over with full tank and inspection checklist\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/bookings/{{bookingId}}/pickup",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}",
+                "pickup"
+              ]
+            }
+          }
+        },
+        {
+          "name": "3.3 Attempt Duplicate Pickup (Rejects with 409 Conflict)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "pm.test('Error indicates status is already ACTIVE_RENTAL', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.message).to.include('ACTIVE_RENTAL');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{providerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"odometerReading\": 45200.5,\n  \"fuelLevelPercent\": 100\n}"
+            },
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/bookings/{{bookingId}}/pickup",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}",
+                "pickup"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Vehicle Return & Completion",
+      "item": [
+        {
+          "name": "4.1 Process Vehicle Return (GOOD Condition)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Lifecycle status is COMPLETED', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql('COMPLETED');",
+                  "    pm.expect(jsonData.actualReturnDate).to.not.be.null;",
+                  "    pm.expect(jsonData.vehicleStatusSummary).to.eql('AVAILABLE');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{providerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"odometerReading\": 45550.0,\n  \"fuelLevelPercent\": 95,\n  \"vehicleCondition\": \"GOOD\",\n  \"returnNotes\": \"Returned on time, no damages found\",\n  \"additionalCharges\": 0.00\n}"
+            },
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/bookings/{{bookingId}}/return",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}",
+                "return"
+              ]
+            }
+          }
+        },
+        {
+          "name": "4.2 Confirm Vehicle Availability Restored (AVAILABLE)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200 OK', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Vehicle status is restored to AVAILABLE', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.eql('AVAILABLE');",
+                  "    pm.expect(jsonData.isAvailable).to.eql(true);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{providerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/vehicles/{{vehicleId}}/availability",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "vehicles",
+                "{{vehicleId}}",
+                "availability"
+              ]
+            }
+          }
+        },
+        {
+          "name": "4.3 Attempt Return on Already COMPLETED Booking (Rejects with 409 Conflict)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 409 Conflict', function () {",
+                  "    pm.response.to.have.status(409);",
+                  "});",
+                  "pm.test('Error indicates status must be ACTIVE_RENTAL', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.message).to.include('ACTIVE_RENTAL');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{providerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"odometerReading\": 45600.0,\n  \"fuelLevelPercent\": 90,\n  \"vehicleCondition\": \"GOOD\"\n}"
+            },
+            "url": {
+              "raw": "{{gatewayUrl}}/api/v1/bookings/{{bookingId}}/return",
+              "host": [
+                "{{gatewayUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "bookings",
+                "{{bookingId}}",
+                "return"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+

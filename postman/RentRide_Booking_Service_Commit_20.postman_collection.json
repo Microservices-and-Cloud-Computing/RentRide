@@ -1,0 +1,259 @@
+{
+  "info": {
+    "_postman_id": "c2000000-booking-service-persistence-rentride",
+    "name": "RentRide - Booking Service Entity & Repository (Commit 20)",
+    "description": "Postman collection to verify Booking Microservice health, JPA database connection pool, Eureka discovery, and Gateway routing for Commit 20 (Entity, Enums & Repository Layer).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "booking_service_url",
+      "value": "http://localhost:8083",
+      "type": "string"
+    },
+    {
+      "key": "gateway_url",
+      "value": "http://localhost:8085",
+      "type": "string"
+    },
+    {
+      "key": "eureka_url",
+      "value": "http://localhost:8761",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Direct Booking Service Status (Port 8083)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Verify booking-service identity & port\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(\"UP\");",
+              "    pm.expect(jsonData.service).to.eql(\"booking-service\");",
+              "    pm.expect(jsonData.port).to.eql(8083);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{booking_service_url}}/api/v1/bookings/status",
+          "host": [
+            "{{booking_service_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "bookings",
+            "status"
+          ]
+        },
+        "description": "Tests direct liveness and identity of booking-service on port 8083."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Database Connection & Health Check (Port 8083)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Service status is UP\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(\"UP\");",
+              "});",
+              "",
+              "pm.test(\"Database (HikariCP / JPA) component is UP\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.components).to.be.an(\"object\");",
+              "    pm.expect(jsonData.components.db.status).to.eql(\"UP\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{booking_service_url}}/actuator/health",
+          "host": [
+            "{{booking_service_url}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        },
+        "description": "Validates Spring Boot Actuator health, verifying active database connectivity for booking repository persistence."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Gateway Routed Booking Status (Port 8085 / 8080)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Gateway forwards request with 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Gateway successfully routes to booking-service\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(\"UP\");",
+              "    pm.expect(jsonData.service).to.eql(\"booking-service\");",
+              "    pm.expect(jsonData.port).to.eql(8083);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{gateway_url}}/api/v1/bookings/status",
+          "host": [
+            "{{gateway_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "bookings",
+            "status"
+          ]
+        },
+        "description": "Tests Spring Cloud Gateway reverse-proxy and dynamic load balancing to lb://BOOKING-SERVICE."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Eureka Registry - BOOKING-SERVICE Instance Query",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Eureka responds with 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"BOOKING-SERVICE is registered with instance UP\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.application.name).to.eql(\"BOOKING-SERVICE\");",
+              "    var instances = jsonData.application.instance;",
+              "    pm.expect(instances.length).to.be.above(0);",
+              "    pm.expect(instances[0].status).to.eql(\"UP\");",
+              "    pm.expect(instances[0].port[\"$\"]).to.eql(8083);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{eureka_url}}/eureka/apps/BOOKING-SERVICE",
+          "host": [
+            "{{eureka_url}}"
+          ],
+          "path": [
+            "eureka",
+            "apps",
+            "BOOKING-SERVICE"
+          ]
+        },
+        "description": "Queries Eureka Discovery Server at port 8761 to verify BOOKING-SERVICE application registration and port binding."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Actuator Metrics - HikariCP Database Connections",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Metrics endpoint returns 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"HikariCP connection pool metrics exist\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.name).to.eql(\"hikaricp.connections\");",
+              "    pm.expect(jsonData.measurements).to.be.an(\"array\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{booking_service_url}}/actuator/metrics/hikaricp.connections",
+          "host": [
+            "{{booking_service_url}}"
+          ],
+          "path": [
+            "actuator",
+            "metrics",
+            "hikaricp.connections"
+          ]
+        },
+        "description": "Inspects HikariCP connection pool metrics verifying the database connection pool is active."
+      },
+      "response": []
+    }
+  ]
+}
+

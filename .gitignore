@@ -1,9 +1,4 @@
-# Compiled classes and build artifacts
-target/
 **/target/
-*.class
-
-# IntelliJ IDEA
 .idea/
 *.iml
 *.iws
@@ -36,4 +31,3 @@ build/
 
 # OS metadata
 .DS_Store
-Thumbs.db
