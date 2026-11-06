@@ -1,27 +1,42 @@
-# Git
-.git
+# Version control
+.git/
 .gitignore
 
-# IDE & Editor files
+# IDEs and Editors
 .idea/
-.vscode/
 *.iml
-*.ipr
 *.iws
+*.ipr
+.vscode/
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
 
-# Maven build outputs
+# Build outputs and dependencies
 target/
 **/target/
+build/
+**/build/
+*.class
 
-# Documentation and markdown
-*.md
-
-# Local Environment Variables
+# Environment files
 .env
+.env.*
 .env.local
 
-# Logs and OS files
+# Logs and OS metadata
 *.log
+logs/
 .DS_Store
 Thumbs.db
 
+# Documentation, Postman, & Reports
+README.md
+docs/
+postman/
+reports/
+docker-compose*.yml

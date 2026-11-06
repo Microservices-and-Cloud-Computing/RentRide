@@ -1,4 +1,33 @@
 **/target/
 .idea/
 *.iml
+*.iws
+*.ipr
+
+# Eclipse / STS
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+# NetBeans
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+**/build/
+
+# VS Code
+.vscode/
+
+# Environment and logs
+.env
+*.log
+
+# OS metadata
 .DS_Store
