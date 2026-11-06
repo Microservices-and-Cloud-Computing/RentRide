@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
+  <title th:text="${emailTitle != null ? emailTitle : 'RentRide Notification'}">RentRide Notification</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f6f9;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+
+  <!-- Outer wrapper -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+         style="background-color:#f4f6f9;padding:32px 0;">
+    <tr>
+      <td align="center">
+
+        <!-- Email card — max 600 px wide -->
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
+               style="max-width:600px;width:100%;background-color:#ffffff;
+                      border-radius:8px;overflow:hidden;
+                      box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+          <!-- ── HEADER ─────────────────────────────────────────── -->
+          <tr>
+            <td style="background-color:#1a56db;padding:28px 40px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td>
+                    <!-- Logo / wordmark -->
+                    <span style="font-size:26px;font-weight:800;color:#ffffff;
+                                 letter-spacing:-0.5px;text-decoration:none;">
+                      🚗 RentRide
+                    </span>
+                    <p style="margin:4px 0 0;font-size:12px;color:#a3c4fd;letter-spacing:0.5px;">
+                      Cloud-Based Vehicle Rental Platform
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- ── CONTENT FRAGMENT ───────────────────────────────── -->
+          <!-- Child templates replace this fragment via th:replace -->
+          <tr>
+            <td style="padding:40px 40px 32px;">
+              <th:block th:fragment="content">
+                <!-- Default placeholder content — overridden by child templates -->
+                <p style="margin:0;font-size:16px;color:#374151;">
+                  This is a RentRide notification email.
+                </p>
+              </th:block>
+            </td>
+          </tr>
+
+          <!-- ── DIVIDER ────────────────────────────────────────── -->
+          <tr>
+            <td style="padding:0 40px;">
+              <hr style="border:none;border-top:1px solid #e5e7eb;margin:0;"/>
+            </td>
+          </tr>
+
+          <!-- ── FOOTER ─────────────────────────────────────────── -->
+          <tr>
+            <td style="padding:24px 40px 32px;background-color:#f9fafb;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td>
+                    <p style="margin:0 0 8px;font-size:13px;color:#6b7280;line-height:1.6;">
+                      This is an automated notification from <strong>RentRide Support</strong>.
+                      Please do not reply to this email.
+                    </p>
+                    <p style="margin:0 0 8px;font-size:13px;color:#6b7280;line-height:1.6;">
+                      📧 For assistance, contact us at
+                      <a href="mailto:support@rentride.com" style="color:#1a56db;text-decoration:none;">
+                        support@rentride.com
+                      </a>
+                      &nbsp;|&nbsp;
+                      🌐 <a href="https://www.rentride.com" style="color:#1a56db;text-decoration:none;">
+                        www.rentride.com
+                      </a>
+                    </p>
+                    <p style="margin:12px 0 0;font-size:11px;color:#9ca3af;">
+                      © 2026 RentRide Pvt Ltd. All rights reserved.<br/>
+                      123 Galle Road, Colombo 03, Sri Lanka.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+        <!-- /Email card -->
+
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>
+

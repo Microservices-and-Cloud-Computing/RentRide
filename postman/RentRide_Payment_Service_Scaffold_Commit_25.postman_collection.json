@@ -1,0 +1,320 @@
+{
+  "info": {
+    "_postman_id": "commit25-payment-service-scaffold-rentride",
+    "name": "RentRide - Commit 25: Payment Service Scaffolding, DB & Eureka Registration",
+    "description": "Comprehensive integration testing collection covering Commit 25 deliverables: Payment Microservice baseline scaffolding, PostgreSQL database connectivity, Eureka service discovery registration, Spring Boot Actuator health checks, and API Gateway load-balanced proxy routing.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "gatewayUrl",
+      "value": "http://localhost:8085",
+      "type": "string",
+      "description": "RentRide Spring Cloud API Gateway URL (defaults to 8085; change to 8080 if running gateway without port override)"
+    },
+    {
+      "key": "paymentServiceUrl",
+      "value": "http://localhost:8084",
+      "type": "string",
+      "description": "Direct Payment Microservice URL on native port 8084"
+    },
+    {
+      "key": "eurekaUrl",
+      "value": "http://localhost:8761",
+      "type": "string",
+      "description": "Netflix Eureka Discovery Server URL on port 8761"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Direct Payment Service Status (Port 8084)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Verify payment-service status payload structure\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(\"UP\");",
+              "    pm.expect(jsonData.service).to.eql(\"payment-service\");",
+              "    pm.expect(jsonData.port).to.eql(8084);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{paymentServiceUrl}}/api/v1/payments/status",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "status"
+          ]
+        },
+        "description": "Tests direct liveness and identity of payment-service on native port 8084."
+      },
+      "response": []
+    },
+    {
+      "name": "2. Direct Payment Service Actuator Health (Port 8084)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Overall application health is UP\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(\"UP\");",
+              "});",
+              "",
+              "pm.test(\"Database connectivity component is UP\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.components).to.be.an(\"object\");",
+              "    pm.expect(jsonData.components.db).to.be.an(\"object\");",
+              "    pm.expect(jsonData.components.db.status).to.eql(\"UP\");",
+              "});",
+              "",
+              "pm.test(\"Eureka discovery composite component is UP\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.components.discoveryComposite).to.be.an(\"object\");",
+              "    pm.expect(jsonData.components.discoveryComposite.status).to.eql(\"UP\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{paymentServiceUrl}}/actuator/health",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        },
+        "description": "Verifies Spring Boot Actuator health endpoint on payment-service, asserting database and Eureka discovery status."
+      },
+      "response": []
+    },
+    {
+      "name": "3. Direct Payment Service Actuator Info (Port 8084)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{paymentServiceUrl}}/actuator/info",
+          "host": [
+            "{{paymentServiceUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "info"
+          ]
+        },
+        "description": "Verifies Spring Boot Actuator info endpoint on payment-service."
+      },
+      "response": []
+    },
+    {
+      "name": "4. Eureka Registry - Query PAYMENT-SERVICE (Port 8761)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Eureka responded with 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"PAYMENT-SERVICE is registered with status UP in Eureka\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.application).to.be.an(\"object\");",
+              "    pm.expect(jsonData.application.name).to.eql(\"PAYMENT-SERVICE\");",
+              "    ",
+              "    var instances = jsonData.application.instance;",
+              "    pm.expect(instances).to.be.an(\"array\").that.is.not.empty;",
+              "    ",
+              "    var instance = instances[0];",
+              "    pm.expect(instance.status).to.eql(\"UP\");",
+              "    pm.expect(instance.port[\"$\"]).to.eql(8084);",
+              "    pm.expect(instance.vipAddress).to.eql(\"payment-service\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{eurekaUrl}}/eureka/apps/PAYMENT-SERVICE",
+          "host": [
+            "{{eurekaUrl}}"
+          ],
+          "path": [
+            "eureka",
+            "apps",
+            "PAYMENT-SERVICE"
+          ]
+        },
+        "description": "Directly queries the Netflix Eureka Service Registry catalog for PAYMENT-SERVICE registration details."
+      },
+      "response": []
+    },
+    {
+      "name": "5. Gateway Routed Payment Status (Port 8085 / 8080)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Gateway forwards request with 200 OK\", function () {",
+              "    pm.response.to.have.status(200);",
+              "});",
+              "",
+              "pm.test(\"Gateway load-balanced to payment-service successfully\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(\"UP\");",
+              "    pm.expect(jsonData.service).to.eql(\"payment-service\");",
+              "    pm.expect(jsonData.port).to.eql(8084);",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/v1/payments/status",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments",
+            "status"
+          ]
+        },
+        "description": "Tests routing and load balancing through Spring Cloud Gateway to PAYMENT-SERVICE via Eureka service discovery without requiring an auth token (whitelisted)."
+      },
+      "response": []
+    },
+    {
+      "name": "6. Gateway Security - Unauthenticated Secured Route Rejected (Sanity Check)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Gateway rejects unauthenticated secured payment route with 401 Unauthorized\", function () {",
+              "    pm.response.to.have.status(401);",
+              "});",
+              "",
+              "pm.test(\"Verify error response payload\", function () {",
+              "    var jsonData = pm.response.json();",
+              "    pm.expect(jsonData.status).to.eql(401);",
+              "    pm.expect(jsonData.error).to.eql(\"Unauthorized\");",
+              "    pm.expect(jsonData.message).to.include(\"authorization token\");",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"bookingId\": 1,\n  \"amount\": 15000.00,\n  \"paymentMethod\": \"CREDIT_CARD\"\n}"
+        },
+        "url": {
+          "raw": "{{gatewayUrl}}/api/v1/payments",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "payments"
+          ]
+        },
+        "description": "Sanity check verifying that non-whitelisted business payment routes require JWT authentication and are protected by Gateway AuthenticationFilter."
+      },
+      "response": []
+    }
+  ]
+}
+
